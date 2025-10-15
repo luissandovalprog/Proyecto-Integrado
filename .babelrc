@@ -1,0 +1,22 @@
+{
+    "presets": [
+      [
+        "@babel/preset-env",
+        {
+          "useBuiltIns": "usage",
+          "corejs": 3,
+          "targets": {
+            "ie": "11",
+            "chrome": "58",
+            "edge": "15"
+          }
+        }
+      ],
+      [
+        "@babel/preset-react",
+        {
+          "runtime": "automatic"
+        }
+      ]
+    ]
+  }
