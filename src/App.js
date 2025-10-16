@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, User, Baby, Printer, LogOut, AlertCircle, CheckCircle, Home } from 'lucide-react';
+import { FileText, User, Baby, Printer, LogOut, AlertCircle, CheckCircle, Home, Search, Eye } from 'lucide-react';
 import { generarBrazaletePDF } from './utilidades/generarPDF';
 import { validarRUT } from './servicios/validaciones';
 import { datosMock } from './mocks/datos';
@@ -13,6 +13,8 @@ const App = () => {
   const [madreSeleccionada, setMadreSeleccionada] = useState(null);
   const [ultimaSesion, setUltimaSesion] = useState(Date.now());
   const [alerta, setAlerta] = useState(null);
+  const [busqueda, setBusqueda] = useState('');
+  const [vistaPrevia, setVistaPrevia] = useState(null);
 
   // Control de timeout de sesión (30 minutos)
   useEffect(() => {
@@ -21,7 +23,7 @@ const App = () => {
         mostrarAlerta('Sesión expirada por inactividad', 'error');
         cerrarSesion();
       }
-    }, 60000); // Revisar cada minuto
+    }, 60000);
 
     return () => clearInterval(intervalo);
   }, [usuario, ultimaSesion]);
@@ -100,6 +102,7 @@ const App = () => {
       rutRN: 'Pendiente Registro Civil',
       ...datos,
       fechaRegistro: new Date().toISOString(),
+      fechaIngreso: datos.fecha,
       registradoPor: usuario.nombre
     };
     
@@ -109,11 +112,33 @@ const App = () => {
     setMadreSeleccionada(null);
   };
 
-  const imprimirBrazalete = (parto) => {
+  const mostrarVistaPreviaPDF = (parto) => {
     const madre = madres.find(m => m.id === parto.madreId);
+    setVistaPrevia({ parto, madre });
+  };
+
+  const imprimirBrazalete = (parto, madre) => {
     generarBrazaletePDF(parto, madre);
+    setVistaPrevia(null);
     mostrarAlerta('Brazalete generado correctamente', 'success');
   };
+
+  // Calcular días de hospitalización
+  const calcularDiasHospitalizacion = (fechaIngreso) => {
+    const fecha = new Date(fechaIngreso);
+    const hoy = new Date();
+    const diferencia = Math.floor((hoy - fecha) / (1000 * 60 * 60 * 24));
+    return diferencia;
+  };
+
+  // Filtrar partos por búsqueda
+  const partosFiltrados = partos.filter(parto => {
+    if (!busqueda) return true;
+    const madre = madres.find(m => m.id === parto.madreId);
+    return madre?.rut.toLowerCase().includes(busqueda.toLowerCase()) ||
+           madre?.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+           parto.rnId.toLowerCase().includes(busqueda.toLowerCase());
+  });
 
   // ============== COMPONENTES ==============
 
@@ -122,13 +147,15 @@ const App = () => {
     const iconos = {
       success: <CheckCircle size={20} />,
       error: <AlertCircle size={20} />,
-      info: <AlertCircle size={20} />
+      info: <AlertCircle size={20} />,
+      advertencia: <AlertCircle size={20} />
     };
 
     const estilos = {
       success: 'alerta-exito',
       error: 'alerta-error',
-      info: 'alerta-info'
+      info: 'alerta-info',
+      advertencia: 'alerta-advertencia'
     };
 
     return (
@@ -142,6 +169,85 @@ const App = () => {
       }}>
         {iconos[tipo]}
         <span>{mensaje}</span>
+      </div>
+    );
+  };
+
+  // Vista previa del brazalete
+  const VistaPreviaBrazalete = () => {
+    if (!vistaPrevia) return null;
+
+    const { parto, madre } = vistaPrevia;
+
+    return (
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 2000
+      }}>
+        <div className="tarjeta" style={{ 
+          maxWidth: '600px', 
+          width: '90%',
+          maxHeight: '90vh',
+          overflow: 'auto'
+        }}>
+          <h2 className="texto-2xl font-bold mb-4">Vista Previa del Brazalete</h2>
+          
+          <div style={{ 
+            border: '2px solid #2563eb', 
+            padding: '1.5rem', 
+            borderRadius: '8px',
+            backgroundColor: '#f9fafb'
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+              <h3 className="font-bold texto-xl" style={{ color: '#2563eb' }}>
+                HOSPITAL CLÍNICO HERMINDA MARTÍN
+              </h3>
+              <p className="texto-sm">Brazalete de Identificación</p>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <h4 className="font-semibold mb-2">RECIÉN NACIDO</h4>
+              <p><strong>ID:</strong> {parto.rnId}</p>
+              <p><strong>Fecha:</strong> {new Date(parto.fecha).toLocaleDateString('es-CL')}</p>
+              <p><strong>Hora:</strong> {parto.hora}</p>
+              <p><strong>Peso:</strong> {parto.pesoRN}g</p>
+              <p><strong>Talla:</strong> {parto.tallaRN}cm</p>
+              <p><strong>APGAR:</strong> {parto.apgar1}/{parto.apgar5}</p>
+            </div>
+
+            <div>
+              <h4 className="font-semibold mb-2">MADRE</h4>
+              <p><strong>Nombre:</strong> {madre.nombre}</p>
+              <p><strong>RUT:</strong> {madre.rut}</p>
+            </div>
+          </div>
+
+          <div className="flex gap-4 mt-6">
+            <button
+              onClick={() => imprimirBrazalete(parto, madre)}
+              className="boton boton-primario"
+              style={{ flex: 1 }}
+            >
+              <Printer size={20} />
+              Imprimir Brazalete
+            </button>
+            <button
+              onClick={() => setVistaPrevia(null)}
+              className="boton boton-gris"
+              style={{ flex: 1 }}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
       </div>
     );
   };
@@ -183,7 +289,7 @@ const App = () => {
             }}>
               <Baby size={40} />
             </div>
-            <h1 className="texto-3xl font-bold mb-4">Sistema de Partos</h1>
+            <h1 className="texto-3xl font-bold mb-4">SIGN - Sistema de Partos</h1>
             <p className="texto-gris">Hospital Clínico Herminda Martín</p>
             <p className="texto-sm texto-gris">Chillán, Chile</p>
           </div>
@@ -236,7 +342,7 @@ const App = () => {
           </div>
           
           <p className="texto-xs texto-gris texto-centro mt-4">
-            Demo v1.0 - Autenticación simulada para pruebas
+            Demo v1.0 - Autenticación simulada para pruebas UAT
           </p>
         </div>
       </div>
@@ -249,10 +355,34 @@ const App = () => {
       const hoy = new Date().toISOString().split('T')[0];
       return p.fecha === hoy;
     });
-    const partosRecientes = partos.slice(-5).reverse();
+    const partosRecientes = partosFiltrados.slice(-10).reverse();
     
     return (
       <div className="animacion-entrada">
+        {/* Barra de búsqueda */}
+        <div className="tarjeta mb-6">
+          <div style={{ position: 'relative' }}>
+            <Search 
+              size={20} 
+              style={{ 
+                position: 'absolute', 
+                left: '12px', 
+                top: '50%', 
+                transform: 'translateY(-50%)',
+                color: '#6b7280'
+              }}
+            />
+            <input
+              type="text"
+              className="input"
+              placeholder="Buscar por RUT de madre, nombre o ID del RN..."
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              style={{ paddingLeft: '2.5rem' }}
+            />
+          </div>
+        </div>
+
         {/* Tarjetas de estadísticas */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="tarjeta tarjeta-hover">
@@ -286,9 +416,9 @@ const App = () => {
           </div>
         </div>
 
-        {/* Tabla de partos recientes */}
+        {/* Tabla de RN hospitalizados con código de colores */}
         <div className="tarjeta">
-          <h2 className="texto-2xl font-bold mb-4">Partos Recientes</h2>
+          <h2 className="texto-2xl font-bold mb-4">Recién Nacidos Hospitalizados</h2>
           {partosRecientes.length === 0 ? (
             <p className="texto-centro texto-gris py-6">No hay partos registrados</p>
           ) : (
@@ -298,12 +428,13 @@ const App = () => {
                   <tr>
                     <th>ID Recién Nacido</th>
                     <th>Madre</th>
-                    <th>Fecha</th>
-                    <th>Hora</th>
+                    <th>RUT Madre</th>
+                    <th>Fecha Ingreso</th>
+                    <th>Días</th>
                     <th>Tipo</th>
                     {usuario.rol !== 'administrativo' && (
                       <>
-                        <th>Peso (g)</th>
+                        <th>Peso</th>
                         <th>APGAR</th>
                       </>
                     )}
@@ -313,12 +444,32 @@ const App = () => {
                 <tbody>
                   {partosRecientes.map(parto => {
                     const madre = madres.find(m => m.id === parto.madreId);
+                    const diasHospitalizacion = calcularDiasHospitalizacion(parto.fechaIngreso);
+                    const esAlerta = diasHospitalizacion > 7;
+                    
                     return (
-                      <tr key={parto.id}>
+                      <tr 
+                        key={parto.id}
+                        style={{ 
+                          backgroundColor: esAlerta ? '#fee2e2' : 'transparent'
+                        }}
+                      >
                         <td className="font-semibold">{parto.rnId}</td>
                         <td>{madre?.nombre || 'N/A'}</td>
-                        <td>{new Date(parto.fecha).toLocaleDateString('es-CL')}</td>
-                        <td>{parto.hora}</td>
+                        <td>{madre?.rut || 'N/A'}</td>
+                        <td>{new Date(parto.fechaIngreso).toLocaleDateString('es-CL')}</td>
+                        <td>
+                          <span style={{
+                            padding: '0.25rem 0.5rem',
+                            borderRadius: '4px',
+                            fontSize: '0.875rem',
+                            fontWeight: 'bold',
+                            backgroundColor: esAlerta ? '#dc2626' : '#10b981',
+                            color: 'white'
+                          }}>
+                            {diasHospitalizacion} días
+                          </span>
+                        </td>
                         <td>
                           <span style={{
                             padding: '0.25rem 0.75rem',
@@ -337,18 +488,35 @@ const App = () => {
                           </>
                         )}
                         <td>
-                          <button
-                            onClick={() => imprimirBrazalete(parto)}
-                            className="boton"
-                            style={{ 
-                              padding: '0.5rem',
-                              backgroundColor: '#3b82f6',
-                              color: 'white'
-                            }}
-                            title="Imprimir Brazalete"
-                          >
-                            <Printer size={18} />
-                          </button>
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button
+                              onClick={() => mostrarVistaPreviaPDF(parto)}
+                              className="boton"
+                              style={{ 
+                                padding: '0.5rem',
+                                backgroundColor: '#3b82f6',
+                                color: 'white'
+                              }}
+                              title="Vista previa del brazalete"
+                            >
+                              <Eye size={18} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                const madreInfo = madres.find(m => m.id === parto.madreId);
+                                imprimirBrazalete(parto, madreInfo);
+                              }}
+                              className="boton"
+                              style={{ 
+                                padding: '0.5rem',
+                                backgroundColor: '#10b981',
+                                color: 'white'
+                              }}
+                              title="Imprimir brazalete"
+                            >
+                              <Printer size={18} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -497,7 +665,7 @@ const App = () => {
     );
   };
 
-  // Formulario de registro de parto
+  // Formulario de registro de parto con MEJORAS UAT
   const FormularioParto = () => {
     const [datos, setDatos] = useState({
       tipo: 'Vaginal',
@@ -507,6 +675,7 @@ const App = () => {
       tallaRN: '',
       apgar1: '',
       apgar5: '',
+      corticoides: 'no',
       observaciones: ''
     });
     const [errores, setErrores] = useState({});
@@ -613,8 +782,23 @@ const App = () => {
             {errores.tallaRN && <p className="mensaje-error">{errores.tallaRN}</p>}
           </div>
           
+          {/* MEJORA UAT: Tooltips en APGAR */}
           <div className="grupo-input">
-            <label className="etiqueta">APGAR 1 min *</label>
+            <label className="etiqueta" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              APGAR 1 min *
+              <span 
+                style={{ 
+                  fontSize: '0.75rem', 
+                  color: '#6b7280',
+                  backgroundColor: '#f3f4f6',
+                  padding: '0.125rem 0.5rem',
+                  borderRadius: '4px'
+                }}
+                title="Puntuación al primer minuto de vida"
+              >
+                al 1 min
+              </span>
+            </label>
             <input
               type="number"
               className={`input ${errores.apgar1 ? 'input-error' : ''}`}
@@ -628,7 +812,21 @@ const App = () => {
           </div>
           
           <div className="grupo-input">
-            <label className="etiqueta">APGAR 5 min *</label>
+            <label className="etiqueta" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              APGAR 5 min *
+              <span 
+                style={{ 
+                  fontSize: '0.75rem', 
+                  color: '#6b7280',
+                  backgroundColor: '#f3f4f6',
+                  padding: '0.125rem 0.5rem',
+                  borderRadius: '4px'
+                }}
+                title="Puntuación a los cinco minutos de vida"
+              >
+                a los 5 min
+              </span>
+            </label>
             <input
               type="number"
               className={`input ${errores.apgar5 ? 'input-error' : ''}`}
@@ -639,6 +837,33 @@ const App = () => {
               max="10"
             />
             {errores.apgar5 && <p className="mensaje-error">{errores.apgar5}</p>}
+          </div>
+        </div>
+
+        {/* MEJORA UAT: Campo de Corticoides */}
+        <div className="grupo-input">
+          <label className="etiqueta">¿La madre recibió corticoides durante la gestación? *</label>
+          <div style={{ display: 'flex', gap: '2rem', marginTop: '0.5rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="corticoides"
+                value="si"
+                checked={datos.corticoides === 'si'}
+                onChange={(e) => setDatos({ ...datos, corticoides: e.target.value })}
+              />
+              <span>Sí</span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="corticoides"
+                value="no"
+                checked={datos.corticoides === 'no'}
+                onChange={(e) => setDatos({ ...datos, corticoides: e.target.value })}
+              />
+              <span>No</span>
+            </label>
           </div>
         </div>
         
@@ -655,7 +880,7 @@ const App = () => {
         
         <div className="flex gap-4">
           <button onClick={handleSubmit} className="boton boton-secundario" style={{ flex: 1 }}>
-            Registrar Parto
+            Guardar y Generar Brazalete
           </button>
           <button
             onClick={() => {
@@ -676,6 +901,7 @@ const App = () => {
   const Layout = ({ children }) => (
     <div style={{ minHeight: '100vh', backgroundColor: '#f3f4f6' }}>
       {alerta && <AlertaFlotante mensaje={alerta.mensaje} tipo={alerta.tipo} />}
+      {vistaPrevia && <VistaPreviaBrazalete />}
       
       <nav style={{
         backgroundColor: '#2563eb',
@@ -687,7 +913,7 @@ const App = () => {
             <div className="flex items-center gap-4">
               <Baby size={36} />
               <div>
-                <h1 className="texto-xl font-bold">Sistema de Partos - HHMM</h1>
+                <h1 className="texto-xl font-bold">SIGN - Sistema de Gestión Neonatal</h1>
                 <p className="texto-sm" style={{ opacity: 0.9 }}>
                   {usuario?.rol.charAt(0).toUpperCase() + usuario?.rol.slice(1)} - {usuario?.nombre}
                 </p>
@@ -738,12 +964,12 @@ const App = () => {
         padding: '1.5rem',
         marginTop: '3rem'
       }}>
-        <p className="texto-sm">Sistema de Trazabilidad de Partos v1.0</p>
+        <p className="texto-sm">SIGN - Sistema Integrado de Gestión Neonatal v1.0</p>
         <p className="texto-sm" style={{ opacity: 0.8, marginTop: '0.5rem' }}>
           Hospital Clínico Herminda Martín - Chillán, Chile
         </p>
         <p className="texto-xs" style={{ opacity: 0.6, marginTop: '0.5rem' }}>
-          Proyecto Integrado - Ingeniería en Ciberseguridad
+          Validado por Matrona María Angélica Soto y Administrativo Carlos Valdivia
         </p>
       </footer>
     </div>
