@@ -18,32 +18,20 @@ const App = () => {
 
   // Control de timeout de sesión (30 minutos)
   useEffect(() => {
-    const intervalo = setInterval(() => {
-      if (usuario && Date.now() - ultimaSesion > 30 * 60 * 1000) {
-        mostrarAlerta('Sesión expirada por inactividad', 'error');
-        cerrarSesion();
-      }
-    }, 60000);
 
-    return () => clearInterval(intervalo);
-  }, [usuario, ultimaSesion]);
+  const intervalo = setInterval(() => {
+    if (usuario && Date.now() - ultimaSesion > 30 * 60 * 1000) {
+      mostrarAlerta("Sesión expirada por inactividad", "error");
+      cerrarSesion();
+    }
+  }, 60000);
+}, [usuario]);
 
   // Actualizar actividad del usuario
   const actualizarActividad = () => {
     setUltimaSesion(Date.now());
   };
 
-  useEffect(() => {
-    if (usuario) {
-      window.addEventListener('click', actualizarActividad);
-      window.addEventListener('keypress', actualizarActividad);
-      
-      return () => {
-        window.removeEventListener('click', actualizarActividad);
-        window.removeEventListener('keypress', actualizarActividad);
-      };
-    }
-  }, [usuario]);
 
   // Funciones auxiliares
   const mostrarAlerta = (mensaje, tipo = 'info') => {
@@ -969,7 +957,7 @@ const App = () => {
           Hospital Clínico Herminda Martín - Chillán, Chile
         </p>
         <p className="texto-xs" style={{ opacity: 0.6, marginTop: '0.5rem' }}>
-          Validado por Matrona María Angélica Soto y Administrativo Carlos Valdivia
+          
         </p>
       </footer>
     </div>
