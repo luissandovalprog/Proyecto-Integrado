@@ -4,7 +4,7 @@
  * En producción, estos serían fetch() reales al backend
  */
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+const API_BASE_URL = 'http://localhost:8000/api';
 const API_TIMEOUT = 10000; // 10 segundos
 
 // Simular delay de red
@@ -395,35 +395,26 @@ export const verificarEstadoSolicitudRUT = async (solicitudId) => {
 /**
  * Obtiene logs de auditoría
  */
-export const obtenerLogsAuditoria = async (filtros = {}) => {
-  await simularDelay();
-  
-  // TODO: Implementar llamada real a API
-  // const params = new URLSearchParams(filtros);
-  // return request(`/auditoria/logs?${params}`);
-  
-  return {
-    exito: true,
-    datos: [],
-    total: 0,
-  };
+// Muestra solo los eventos de la sesión en curso (se borra si recargas o navegas) simulacion
+export const obtenerLogsAuditoria = async () => {
+  await simularDelay(100);
+  return { exito: true, datos: logsAuditoriaMock, total: logsAuditoriaMock.length };
 };
 
 /**
  * Registra un evento de auditoría
  */
+// Guarda logs de auditoría en localStorage
+let logsAuditoriaMock = [];
+
+// Función simula el registro: agrega a array temporal y retorna éxito
 export const registrarEventoAuditoria = async (evento) => {
   await simularDelay(100);
-  
-  // TODO: Implementar llamada real a API
-  // return request('/auditoria/evento', {
-  //   method: 'POST',
-  //   body: JSON.stringify(evento),
-  // });
-  
-  return {
-    exito: true,
-  };
+  logsAuditoriaMock.push({
+    ...evento,
+    fecha_hora: new Date().toISOString()
+  });
+  return { exito: true };
 };
 
 // ============== MANEJO DE ERRORES ==============

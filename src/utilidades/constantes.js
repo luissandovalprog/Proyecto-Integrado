@@ -14,7 +14,9 @@ export const SISTEMA_INFO = {
     ADMINISTRATIVO: 'administrativo',
     MATRONA: 'matrona',
     MEDICO: 'medico',
-    NEONATOLOGIA: 'neonatologia'
+    NEONATOLOGIA: 'neonatologia',
+    ENFERMERA: 'enfermera',
+    ADMIN_SISTEMA: 'admin_sistema',
   };
   
   // Tipos de parto

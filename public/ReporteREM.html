@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Reporte REM - Gestión Neonatal</title>
+  <style>
+    body { font-family: Arial; margin: 30px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; }
+    th { background: #eee; }
+  </style>
+</head>
+<body>
+  <h1>Generar Reporte REM</h1>
+  <form id="form-reporte-rem">
+    Fecha inicio: <input type="date" id="fecha_inicio" required>
+    Fecha fin: <input type="date" id="fecha_fin" required>
+    <button type="submit">Generar</button>
+  </form>
+  <button id="btn-exportar-excel" style="display:none;">Exportar a Excel</button>
+
+  <div id="reporte-contenido"></div>
+
+<script>
+// Datos simulados
+const partos = [
+  {
+    fecha_hora_inicio: '2025-10-10',
+    tipo_parto: 'Normal',
+    edad_gestacional: 38,
+    recienNacido: {
+      rut_provisorio: '12345678-9',
+      sexo: 'M',
+      peso_gr: 3050,
+      talla_cm: 49,
+      apgar_min1: 8,
+      apgar_min5: 9
+    }
+  },
+  {
+    fecha_hora_inicio: '2025-10-13',
+    tipo_parto: 'Cesárea',
+    edad_gestacional: 36,
+    recienNacido: {
+      rut_provisorio: '98765432-1',
+      sexo: 'F',
+      peso_gr: 2500,
+      talla_cm: 47,
+      apgar_min1: 7,
+      apgar_min5: 8
+    }
+  }
+];
+
+let reporteFiltrado = [];
+
+document.getElementById('form-reporte-rem').onsubmit = function(event) {
+  event.preventDefault();
+  // Filtros de fechas
+  const inicio = document.getElementById('fecha_inicio').value;
+  const fin = document.getElementById('fecha_fin').value;
+  reporteFiltrado = partos.filter(p =>
+    p.fecha_hora_inicio >= inicio && p.fecha_hora_inicio <= fin
+  );
+
+  // Renderiza tabla
+  let html = '<table><tr><th>Fecha</th><th>Tipo de Parto</th><th>Edad Gestacional</th><th>RUT RN</th><th>Sexo</th><th>Peso (g)</th><th>Talla (cm)</th><th>Apgar 1</th><th>Apgar 5</th></tr>';
+  reporteFiltrado.forEach(p => {
+    html += `<tr>
+      <td>${p.fecha_hora_inicio}</td>
+      <td>${p.tipo_parto}</td>
+      <td>${p.edad_gestacional}</td>
+      <td>${p.recienNacido.rut_provisorio}</td>
+      <td>${p.recienNacido.sexo}</td>
+      <td>${p.recienNacido.peso_gr}</td>
+      <td>${p.recienNacido.talla_cm}</td>
+      <td>${p.recienNacido.apgar_min1}</td>
+      <td>${p.recienNacido.apgar_min5}</td>
+    </tr>`;
+  });
+  html += '</table>';
+  document.getElementById('reporte-contenido').innerHTML = html;
+  document.getElementById('btn-exportar-excel').style.display = reporteFiltrado.length ? 'inline-block' : 'none';
+}
+
+// Exportar a Excel (CSV)
+document.getElementById('btn-exportar-excel').onclick = function() {
+  let csv = 'Fecha,Tipo de Parto,Edad Gestacional,RUT RN,Sexo,Peso (g),Talla (cm),Apgar 1,Apgar 5\n';
+  reporteFiltrado.forEach(p => {
+    csv += [
+      p.fecha_hora_inicio, p.tipo_parto, p.edad_gestacional,
+      p.recienNacido.rut_provisorio, p.recienNacido.sexo,
+      p.recienNacido.peso_gr, p.recienNacido.talla_cm,
+      p.recienNacido.apgar_min1, p.recienNacido.apgar_min5
+    ].join(',') + '\n';
+  });
+  const blob = new Blob([csv], {type: 'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'ReporteREM.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+</script>
+</body>
+</html>

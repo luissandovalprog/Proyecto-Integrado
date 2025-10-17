@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, User, Baby, Printer, LogOut, AlertCircle, CheckCircle, Home, Search, Eye } from 'lucide-react';
+import { FileText, User, Baby, Printer, LogOut, AlertCircle, CheckCircle, Home, Search, Eye, PlusCircle, Shield } from 'lucide-react';
 import { generarBrazaletePDF } from './utilidades/generarPDF';
 import { validarRUT } from './servicios/validaciones';
 import { datosMock } from './mocks/datos';
+import { registrarEventoAuditoria } from './servicios/api';
+import TablaAuditoria from './componentes/TablaAuditoria';
+import ReporteREM from './componentes/ReporteREM';
+
 
 const App = () => {
   // Estados globales
@@ -71,6 +75,13 @@ const App = () => {
       fechaIngreso: new Date().toISOString(),
       registradoPor: usuario.nombre
     };
+
+    // Registrar acción de auditoría:
+  registrarEventoAuditoria({
+    accion: 'ADMISION_MADRE',
+    detalle: `Admisión de madre: ${datos.rut} (${datos.nombre}) por usuario ${usuario?.nombre || 'desconocido'}`,
+    usuario: usuario?.nombre || 'desconocido',
+  });
     
     setMadres([...madres, nuevaMadre]);
     mostrarAlerta('Madre registrada exitosamente', 'success');
@@ -78,6 +89,16 @@ const App = () => {
   };
 
   const registrarParto = (datos) => {
+
+     setPartos([...partos, nuevoParto]);
+  const madre = madres.find(m => m.id === madreSeleccionada.id);
+
+  registrarEventoAuditoria({
+    accion: 'REGISTRO_PARTO',
+    detalle: `Registro de parto: ${madre?.rut || ''} (${madre?.nombre || ''}) por usuario ${usuario?.nombre || 'desconocido'}`,
+    usuario: usuario?.nombre || 'desconocido',
+  });
+
     if (!datos.pesoRN || !datos.tallaRN || !datos.apgar1 || !datos.apgar5) {
       mostrarAlerta('Complete todos los campos obligatorios', 'error');
       return;
@@ -326,6 +347,22 @@ const App = () => {
             >
               <FileText size={20} />
               Acceder como Médico
+            </button>
+                        <button
+              onClick={(e) => handleLogin(e, 'enfermera')}
+              className="boton boton-completo"
+              style={{ backgroundColor: '#00bddfff', color: 'white' }}
+            >
+              <User size={20} />
+              Acceder como Enfermera
+            </button>
+                        <button
+              onClick={(e) => handleLogin(e, 'admin_sistema')}
+              className="boton boton-completo"
+              style={{ backgroundColor: '#5d00ffff', color: 'white' }}
+            >
+              <User size={20} />
+              Acceder como Administrativo del Sistema
             </button>
           </div>
           
@@ -918,6 +955,17 @@ const App = () => {
                 Inicio
               </button>
               
+              {(usuario?.rol === 'medico') && (
+              <button 
+              onClick={() => setPantallaActual('reporteREM')}
+              className='boton'
+              style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: 'white' }}
+              >
+                <FileText size={18} />
+                  Reporte REM Neonatal
+              </button>
+              )}
+              
               {(usuario?.rol === 'administrativo' || usuario?.rol === 'matrona') && (
                 <button
                   onClick={() => setPantallaActual('admision')}
@@ -969,12 +1017,20 @@ const App = () => {
   }
 
   return (
-    <Layout>
-      {pantallaActual === 'dashboard' && <Dashboard />}
-      {pantallaActual === 'admision' && <FormularioAdmision />}
-      {pantallaActual === 'registrar-parto' && <FormularioParto />}
-    </Layout>
-  );
+  <Layout>
+    {pantallaActual === 'dashboard' && (
+      <>
+        <Dashboard />
+        {/* Aquí agregas la tabla ade auditoría */}
+        <h2>Historial de Auditoría</h2>
+        <TablaAuditoria />
+      </>
+    )}
+    {pantallaActual === 'reporteREM' && <ReporteREM partos={partos} madres={madres} />}
+    {pantallaActual === 'admision' && <FormularioAdmision />}
+    {pantallaActual === 'registrar-parto' && <FormularioParto />}
+  </Layout>
+);
 };
 
 export default App;

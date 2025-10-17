@@ -90,28 +90,43 @@ export const datosMock = {
   ],
 
   usuarios: [
-    {
-      id: 1,
-      usuario: 'admin',
-      nombre: 'Administrativo Demo',
-      rol: 'administrativo',
-      activo: true
-    },
-    {
-      id: 2,
-      usuario: 'matrona',
-      nombre: 'Matrona Demo',
-      rol: 'matrona',
-      activo: true
-    },
-    {
-      id: 3,
-      usuario: 'medico',
-      nombre: 'Médico Demo',
-      rol: 'medico',
-      activo: true
-    }
-  ]
+  {
+    id: 1,
+    usuario: 'admin',
+    nombre: 'Administrativo Demo',
+    rol: 'administrativo',
+    activo: true
+  },
+  {
+    id: 2,
+    usuario: 'matrona',
+    nombre: 'Matrona Demo',
+    rol: 'matrona',
+    activo: true
+  },
+  {
+    id: 3,
+    usuario: 'medico',
+    nombre: 'Médico Demo',
+    rol: 'medico',
+    activo: true
+  },
+  {
+    id: 4,
+    usuario: 'enfermera',
+    nombre: 'Enfermera Demo',
+    rol: 'enfermera',
+    activo: true
+  },
+  {
+    id: 5,
+    usuario: 'adminSistema',
+    nombre: 'Admin Sistema',
+    rol: 'admin_sistema',
+    activo: true
+  }
+]
+
 };
 
 // Funciones auxiliares para trabajar con los mocks
