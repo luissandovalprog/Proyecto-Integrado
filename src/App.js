@@ -6,6 +6,10 @@ import { datosMock } from './mocks/datos';
 import { registrarEventoAuditoria } from './servicios/api';
 import TablaAuditoria from './componentes/TablaAuditoria';
 import ReporteREM from './componentes/ReporteREM';
+import NotasEnfermera from './componentes/NotasEnfermera';
+import EditarMadre from './componentes/EditarMadre';
+
+
 
 
 const App = () => {
@@ -19,12 +23,16 @@ const App = () => {
   const [alerta, setAlerta] = useState(null);
   const [busqueda, setBusqueda] = useState('');
   const [vistaPrevia, setVistaPrevia] = useState(null);
+  const [notasEnfermera, setNotasEnfermera] = useState([]);
+  const [vistaPreviaMadre, setVistaPreviaMadre] = useState(null);
+
+
 
   // Control de timeout de sesión (30 minutos)
   useEffect(() => {
 
   const intervalo = setInterval(() => {
-    if (usuario && Date.now() - ultimaSesion > 30 * 60 * 1000) {
+    if (usuario && Date.now() - ultimaSesion > 45 * 60 * 1000) {
       mostrarAlerta("Sesión expirada por inactividad", "error");
       cerrarSesion();
     }
@@ -236,6 +244,9 @@ const App = () => {
               <h4 className="font-semibold mb-2">MADRE</h4>
               <p><strong>Nombre:</strong> {madre.nombre}</p>
               <p><strong>RUT:</strong> {madre.rut}</p>
+              <p><strong>Dirección:</strong> {madre.direccion}</p>
+              <p><strong>Teléfono:</strong> {madre.telefono}</p>
+              <p><strong>Previsión:</strong> {madre.prevision}</p>
             </div>
           </div>
 
@@ -260,8 +271,7 @@ const App = () => {
       </div>
     );
   };
-
-  // Pantalla de Login
+    // Pantalla de Login
   const PantallaLogin = () => {
     const [credenciales, setCredenciales] = useState({ usuario: '', contrasena: '' });
 
@@ -362,7 +372,7 @@ const App = () => {
               style={{ backgroundColor: '#5d00ffff', color: 'white' }}
             >
               <User size={20} />
-              Acceder como Administrativo del Sistema
+              Acceder como Administrador del Sistema
             </button>
           </div>
           
@@ -513,34 +523,70 @@ const App = () => {
                           </>
                         )}
                         <td>
-                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <div style={{ display: 'flex', gap: '0.5rem' 
+                          }}>
+                            {usuario.rol !== 'administrativo' && (
                             <button
-                              onClick={() => mostrarVistaPreviaPDF(parto)}
-                              className="boton"
-                              style={{ 
-                                padding: '0.5rem',
-                                backgroundColor: '#3b82f6',
-                                color: 'white'
-                              }}
-                              title="Vista previa del brazalete"
-                            >
-                              <Eye size={18} />
-                            </button>
-                            <button
-                              onClick={() => {
-                                const madreInfo = madres.find(m => m.id === parto.madreId);
-                                imprimirBrazalete(parto, madreInfo);
-                              }}
-                              className="boton"
-                              style={{ 
-                                padding: '0.5rem',
-                                backgroundColor: '#10b981',
-                                color: 'white'
-                              }}
-                              title="Imprimir brazalete"
-                            >
-                              <Printer size={18} />
-                            </button>
+    onClick={() => mostrarVistaPreviaPDF(parto)}
+    className="boton"
+    style={{
+      padding: '0.5rem',
+      backgroundColor: '#3b82f6',
+      color: 'white'
+    }}
+    title="Vista previa del brazalete"
+  >
+    <Eye size={18} />
+  </button>
+  )}
+
+  {usuario.rol === 'administrativo' && (
+    <button
+      onClick={() => setVistaPreviaMadre(madre)}
+      className="boton"
+      style={{
+        padding: '0.5rem',
+        backgroundColor: '#6366f1',
+        color: 'white'
+      }}
+      title="Vista previa de la madre"
+    >
+      <Eye size={18} />
+    </button>
+  )}
+  {usuario.rol === 'administrativo' ? (
+    <button
+      onClick={() => {
+        setMadreSeleccionada(madre); // o madres.find(...) según tu lógica
+        setPantallaActual('editar-madre');
+      }}
+      className="boton"
+      style={{
+        padding: '0.5rem',
+        backgroundColor: '#f59e0b', // Ejemplo color diferente para distinguir la acción administrativa
+        color: 'white'
+      }}
+      title="Actualizar información de la madre"
+    >
+      <User size={18} />
+    </button>
+  ) : (
+    <button
+      onClick={() => {
+        const madreInfo = madres.find(m => m.id === parto.madreId);
+        imprimirBrazalete(parto, madreInfo);
+      }}
+      className="boton"
+      style={{
+        padding: '0.5rem',
+        backgroundColor: '#10b981',
+        color: 'white'
+      }}
+      title="Imprimir brazalete"
+    >
+      <Printer size={18} />
+    </button>
+  )}
                           </div>
                         </td>
                       </tr>
@@ -594,6 +640,9 @@ const App = () => {
       rut: '',
       nombre: '',
       edad: '',
+      direccion: '',
+      telefono: '',
+      prevision: '',
       antecedentes: ''
     });
     const [errores, setErrores] = useState({});
@@ -648,7 +697,16 @@ const App = () => {
           />
           {errores.nombre && <p className="mensaje-error">{errores.nombre}</p>}
         </div>
-        
+        <div className="grupo-input">
+          <label className="etiqueta">Dirección</label>
+          <input
+            type="text"
+            className="input"
+            placeholder="Dirección de residencia"
+            value={datos.direccion}
+            onChange={(e) => setDatos({ ...datos, direccion: e.target.value })}
+          />
+        </div>
         <div className="grupo-input">
           <label className="etiqueta">Edad *</label>
           <input
@@ -662,7 +720,26 @@ const App = () => {
           />
           {errores.edad && <p className="mensaje-error">{errores.edad}</p>}
         </div>
-        
+        <div className="grupo-input">
+          <label className="etiqueta">Teléfono de Contacto</label>
+          <input 
+            type="number"
+            className="input"
+            placeholder="Número de teléfono"
+            value={datos.telefono}
+            onChange={(e) => setDatos({ ...datos, telefono: e.target.value })}
+          />
+        </div>
+        <div className="grupo-input">
+          <label className="etiqueta">Previsión de Salud</label>
+          <input
+            type="text"
+            className="input"
+            placeholder="Ej: FONASA, ISAPRE, etc."
+            value={datos.prevision}
+            onChange={(e) => setDatos({ ...datos, prevision: e.target.value })}
+          />
+        </div>
         <div className="grupo-input">
           <label className="etiqueta">Antecedentes Médicos</label>
           <textarea
@@ -976,6 +1053,17 @@ const App = () => {
                   Nueva Admisión
                 </button>
               )}
+
+              {(usuario?.rol === 'enfermera') && (
+                <button
+                  onClick={() => setPantallaActual('notas-enfermera')}
+                  className="boton"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: 'white' }}
+                >
+                  <User size={20} />
+                  Notas Enfermera
+                </button>
+              )}
               
               <button
                 onClick={cerrarSesion}
@@ -1026,11 +1114,39 @@ const App = () => {
         <TablaAuditoria />
       </>
     )}
+    {pantallaActual === 'editar-madre' && madreSeleccionada && (
+      <EditarMadre
+        madre={madreSeleccionada}
+        onGuardar={datosActualizados => {
+          // Actualiza la madre en el estado de madres
+          setMadres(madres.map(m =>
+            m.id === madreSeleccionada.id ? { ...m, ...datosActualizados } : m
+          ));
+          setMadreSeleccionada(null);
+          setPantallaActual('dashboard');
+          mostrarAlerta('Datos actualizados correctamente', 'success');
+        }}
+        onCancelar={() => {
+          setMadreSeleccionada(null);
+          setPantallaActual('dashboard');
+        }}
+      />
+    )}
+
     {pantallaActual === 'reporteREM' && <ReporteREM partos={partos} madres={madres} />}
     {pantallaActual === 'admision' && <FormularioAdmision />}
     {pantallaActual === 'registrar-parto' && <FormularioParto />}
+    {pantallaActual === 'notas-enfermera' && usuario.rol === 'enfermera' && (
+  <NotasEnfermera
+    notas={notasEnfermera}
+    setNotas={setNotasEnfermera}
+    usuario={usuario}
+  />
+)}
+
   </Layout>
 );
 };
+
 
 export default App;

@@ -133,6 +133,23 @@ export const generarBrazaletePDF = (parto, madre) => {
   doc.setFont('helvetica', 'normal');
   doc.text(`${madre.edad} años`, 135, yPos);
   
+  yPos += 10;
+  doc.setFont('helvetica', 'bold');
+  doc.text('Dirección:', 20, yPos);
+  doc.setFont('helvetica', 'normal');
+  doc.text(madre.direccion || '', 50, yPos);
+
+  yPos += 10;
+  doc.setFont('helvetica', 'bold');
+  doc.text('Teléfono:', 20, yPos);
+  doc.setFont('helvetica', 'normal');
+  doc.text(madre.telefono || '', 50, yPos);
+
+  yPos += 10;
+  doc.setFont('helvetica', 'bold');
+  doc.text('Previsión:', 20, yPos);
+  doc.setFont('helvetica', 'normal');
+  doc.text(madre.prevision || '', 50, yPos);
   yPos += 20;
   
   // Observaciones si existen
