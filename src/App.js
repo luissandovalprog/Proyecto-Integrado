@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, User, Baby, Printer, LogOut, AlertCircle, CheckCircle, Home, Search, Eye, PlusCircle, Shield } from 'lucide-react';
+import { FileText, User, Baby, Printer, LogOut, AlertCircle, CheckCircle, Home, Search, Eye, PlusCircle, Shield, BarChart3 } from 'lucide-react';
 import { generarBrazaletePDF } from './utilidades/generarPDF';
 import { validarRUT } from './servicios/validaciones';
 import { datosMock } from './mocks/datos';
@@ -8,9 +8,7 @@ import TablaAuditoria from './componentes/TablaAuditoria';
 import ReporteREM from './componentes/ReporteREM';
 import NotasEnfermera from './componentes/NotasEnfermera';
 import EditarMadre from './componentes/EditarMadre';
-
-
-
+import { PERMISOS, ROLES, MENSAJES, TIMEOUT_SESION } from './utilidades/constantes';
 
 const App = () => {
   // Estados globales
@@ -26,24 +24,27 @@ const App = () => {
   const [notasEnfermera, setNotasEnfermera] = useState([]);
   const [vistaPreviaMadre, setVistaPreviaMadre] = useState(null);
 
+  // Función para verificar permisos
+  const tienePermiso = (permiso) => {
+    if (!usuario) return false;
+    return PERMISOS[usuario.rol]?.[permiso] || false;
+  };
 
-
-  // Control de timeout de sesión (30 minutos)
+  // Control de timeout de sesión (usa constante)
   useEffect(() => {
-
-  const intervalo = setInterval(() => {
-    if (usuario && Date.now() - ultimaSesion > 45 * 60 * 1000) {
-      mostrarAlerta("Sesión expirada por inactividad", "error");
-      cerrarSesion();
-    }
-  }, 60000);
-}, [usuario]);
+    const intervalo = setInterval(() => {
+      if (usuario && Date.now() - ultimaSesion > TIMEOUT_SESION) {
+        mostrarAlerta(MENSAJES.error.sesionExpirada, "error");
+        cerrarSesion();
+      }
+    }, 60000);
+    return () => clearInterval(intervalo);
+  }, [usuario, ultimaSesion]);
 
   // Actualizar actividad del usuario
   const actualizarActividad = () => {
     setUltimaSesion(Date.now());
   };
-
 
   // Funciones auxiliares
   const mostrarAlerta = (mensaje, tipo = 'info') => {
@@ -62,12 +63,18 @@ const App = () => {
     setUsuario(null);
     setPantallaActual('login');
     setMadreSeleccionada(null);
-    mostrarAlerta('Sesión cerrada correctamente', 'info');
+    mostrarAlerta(MENSAJES.exito.sesionCerrada, 'info');
   };
 
   const agregarMadre = (datos) => {
+    // Verificar permiso
+    if (!tienePermiso('registrarMadres')) {
+      mostrarAlerta(MENSAJES.error.sinPermiso, 'error');
+      return;
+    }
+
     if (!validarRUT(datos.rut)) {
-      mostrarAlerta('El RUT ingresado no es válido', 'error');
+      mostrarAlerta(MENSAJES.error.rutInvalido, 'error');
       return;
     }
     
@@ -84,31 +91,26 @@ const App = () => {
       registradoPor: usuario.nombre
     };
 
-    // Registrar acción de auditoría:
-  registrarEventoAuditoria({
-    accion: 'ADMISION_MADRE',
-    detalle: `Admisión de madre: ${datos.rut} (${datos.nombre}) por usuario ${usuario?.nombre || 'desconocido'}`,
-    usuario: usuario?.nombre || 'desconocido',
-  });
+    registrarEventoAuditoria({
+      accion: 'ADMISION_MADRE',
+      detalle: `Admisión de madre: ${datos.rut} (${datos.nombre}) por usuario ${usuario?.nombre || 'desconocido'}`,
+      usuario: usuario?.nombre || 'desconocido',
+    });
     
     setMadres([...madres, nuevaMadre]);
-    mostrarAlerta('Madre registrada exitosamente', 'success');
+    mostrarAlerta(MENSAJES.exito.madreRegistrada, 'success');
     setPantallaActual('dashboard');
   };
 
   const registrarParto = (datos) => {
-
-     setPartos([...partos, nuevoParto]);
-  const madre = madres.find(m => m.id === madreSeleccionada.id);
-
-  registrarEventoAuditoria({
-    accion: 'REGISTRO_PARTO',
-    detalle: `Registro de parto: ${madre?.rut || ''} (${madre?.nombre || ''}) por usuario ${usuario?.nombre || 'desconocido'}`,
-    usuario: usuario?.nombre || 'desconocido',
-  });
+    // Verificar permiso
+    if (!tienePermiso('registrarPartos')) {
+      mostrarAlerta(MENSAJES.error.sinPermiso, 'error');
+      return;
+    }
 
     if (!datos.pesoRN || !datos.tallaRN || !datos.apgar1 || !datos.apgar5) {
-      mostrarAlerta('Complete todos los campos obligatorios', 'error');
+      mostrarAlerta(MENSAJES.error.camposObligatorios, 'error');
       return;
     }
 
@@ -122,22 +124,49 @@ const App = () => {
       fechaIngreso: datos.fecha,
       registradoPor: usuario.nombre
     };
+
+    const madre = madres.find(m => m.id === madreSeleccionada.id);
+
+    registrarEventoAuditoria({
+      accion: 'REGISTRO_PARTO',
+      detalle: `Registro de parto: ${madre?.rut || ''} (${madre?.nombre || ''}) por usuario ${usuario?.nombre || 'desconocido'}`,
+      usuario: usuario?.nombre || 'desconocido',
+    });
     
     setPartos([...partos, nuevoParto]);
-    mostrarAlerta('Parto registrado exitosamente', 'success');
+    mostrarAlerta(MENSAJES.exito.partoRegistrado, 'success');
     setPantallaActual('dashboard');
     setMadreSeleccionada(null);
   };
 
   const mostrarVistaPreviaPDF = (parto) => {
+    // Verificar permiso
+    if (!tienePermiso('generarPDF')) {
+      mostrarAlerta(MENSAJES.error.sinPermiso, 'error');
+      return;
+    }
     const madre = madres.find(m => m.id === parto.madreId);
     setVistaPrevia({ parto, madre });
   };
 
   const imprimirBrazalete = (parto, madre) => {
+    // Verificar permiso
+    if (!tienePermiso('generarPDF')) {
+      mostrarAlerta(MENSAJES.error.sinPermiso, 'error');
+      return;
+    }
     generarBrazaletePDF(parto, madre);
     setVistaPrevia(null);
     mostrarAlerta('Brazalete generado correctamente', 'success');
+  };
+
+  const editarParto = () => {
+    // Verificar permiso
+    if (!tienePermiso('editarPartos')) {
+      mostrarAlerta(MENSAJES.error.sinPermiso, 'error');
+      return false;
+    }
+    return true;
   };
 
   // Calcular días de hospitalización
@@ -271,7 +300,79 @@ const App = () => {
       </div>
     );
   };
-    // Pantalla de Login
+
+  // Vista previa de información de la madre
+  const VistaPreviaMadre = () => {
+    if (!vistaPreviaMadre) return null;
+
+    return (
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 2000
+      }}>
+        <div className="tarjeta" style={{ 
+          maxWidth: '600px', 
+          width: '90%',
+          maxHeight: '90vh',
+          overflow: 'auto'
+        }}>
+          <h2 className="texto-2xl font-bold mb-4">Información de la Madre</h2>
+          
+          <div style={{ 
+            border: '2px solid #2563eb', 
+            padding: '1.5rem', 
+            borderRadius: '8px',
+            backgroundColor: '#f9fafb'
+          }}>
+            <div style={{ marginBottom: '1rem' }}>
+              <h4 className="font-semibold mb-3" style={{ color: '#2563eb' }}>DATOS PERSONALES</h4>
+              <p className="mb-2"><strong>Nombre:</strong> {vistaPreviaMadre.nombre}</p>
+              <p className="mb-2"><strong>RUT:</strong> {vistaPreviaMadre.rut}</p>
+              <p className="mb-2"><strong>Edad:</strong> {vistaPreviaMadre.edad} años</p>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <h4 className="font-semibold mb-3" style={{ color: '#2563eb' }}>CONTACTO</h4>
+              <p className="mb-2"><strong>Dirección:</strong> {vistaPreviaMadre.direccion}</p>
+              <p className="mb-2"><strong>Teléfono:</strong> {vistaPreviaMadre.telefono}</p>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <h4 className="font-semibold mb-3" style={{ color: '#2563eb' }}>INFORMACIÓN MÉDICA</h4>
+              <p className="mb-2"><strong>Previsión:</strong> {vistaPreviaMadre.prevision}</p>
+              <p className="mb-2"><strong>Antecedentes:</strong> {vistaPreviaMadre.antecedentes || 'Sin antecedentes registrados'}</p>
+            </div>
+
+            <div>
+              <h4 className="font-semibold mb-3" style={{ color: '#2563eb' }}>REGISTRO</h4>
+              <p className="mb-2"><strong>Fecha de Ingreso:</strong> {new Date(vistaPreviaMadre.fechaIngreso).toLocaleDateString('es-CL')}</p>
+              <p className="mb-2"><strong>Registrado por:</strong> {vistaPreviaMadre.registradoPor}</p>
+            </div>
+          </div>
+
+          <div className="flex gap-4 mt-6">
+            <button
+              onClick={() => setVistaPreviaMadre(null)}
+              className="boton boton-primario"
+              style={{ flex: 1 }}
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Pantalla de Login
   const PantallaLogin = () => {
     const [credenciales, setCredenciales] = useState({ usuario: '', contrasena: '' });
 
@@ -337,41 +438,41 @@ const App = () => {
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             <button
-              onClick={(e) => handleLogin(e, 'administrativo')}
+              onClick={(e) => handleLogin(e, ROLES.ADMINISTRATIVO)}
               className="boton boton-primario boton-completo"
             >
               <User size={20} />
               Acceder como Administrativo
             </button>
             <button
-              onClick={(e) => handleLogin(e, 'matrona')}
+              onClick={(e) => handleLogin(e, ROLES.MATRONA)}
               className="boton boton-secundario boton-completo"
             >
-              <FileText size={20} />
+              <User size={20} />
               Acceder como Matrona
             </button>
             <button
-              onClick={(e) => handleLogin(e, 'medico')}
+              onClick={(e) => handleLogin(e, ROLES.MEDICO)}
               className="boton boton-completo"
               style={{ backgroundColor: '#7c3aed', color: 'white' }}
             >
-              <FileText size={20} />
+              <User size={20} />
               Acceder como Médico
             </button>
-                        <button
-              onClick={(e) => handleLogin(e, 'enfermera')}
+            <button
+              onClick={(e) => handleLogin(e, ROLES.ENFERMERA)}
               className="boton boton-completo"
               style={{ backgroundColor: '#00bddfff', color: 'white' }}
             >
               <User size={20} />
               Acceder como Enfermera
             </button>
-                        <button
-              onClick={(e) => handleLogin(e, 'admin_sistema')}
+            <button
+              onClick={(e) => handleLogin(e, ROLES.ADMIN_SISTEMA)}
               className="boton boton-completo"
               style={{ backgroundColor: '#5d00ffff', color: 'white' }}
             >
-              <User size={20} />
+              <Shield size={20} />
               Acceder como Administrador del Sistema
             </button>
           </div>
@@ -418,188 +519,222 @@ const App = () => {
           </div>
         </div>
 
-        {/* Tarjetas de estadísticas */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="tarjeta tarjeta-hover">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="texto-sm texto-gris">Madres Registradas</p>
-                <p className="texto-3xl font-bold" style={{ color: '#2563eb' }}>{madres.length}</p>
+        {/* Tarjetas de estadísticas - Solo si tiene permiso */}
+        {tienePermiso('verEstadisticas') && (
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="tarjeta tarjeta-hover">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="texto-sm texto-gris">Madres Registradas</p>
+                  <p className="texto-3xl font-bold" style={{ color: '#2563eb' }}>{madres.length}</p>
+                </div>
+                <User size={48} color="#2563eb" />
               </div>
-              <User size={48} color="#2563eb" />
+            </div>
+            
+            <div className="tarjeta tarjeta-hover">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="texto-sm texto-gris">Partos Totales</p>
+                  <p className="texto-3xl font-bold" style={{ color: '#10b981' }}>{partos.length}</p>
+                </div>
+                <Baby size={48} color="#10b981" />
+              </div>
+            </div>
+            
+            <div className="tarjeta tarjeta-hover">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="texto-sm texto-gris">Partos Hoy</p>
+                  <p className="texto-3xl font-bold" style={{ color: '#8b5cf6' }}>{partosHoy.length}</p>
+                </div>
+                <FileText size={48} color="#8b5cf6" />
+              </div>
             </div>
           </div>
-          
-          <div className="tarjeta tarjeta-hover">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="texto-sm texto-gris">Partos Totales</p>
-                <p className="texto-3xl font-bold" style={{ color: '#10b981' }}>{partos.length}</p>
-              </div>
-              <Baby size={48} color="#10b981" />
-            </div>
-          </div>
-          
-          <div className="tarjeta tarjeta-hover">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="texto-sm texto-gris">Partos Hoy</p>
-                <p className="texto-3xl font-bold" style={{ color: '#8b5cf6' }}>{partosHoy.length}</p>
-              </div>
-              <FileText size={48} color="#8b5cf6" />
-            </div>
-          </div>
-        </div>
+        )}
 
-        {/* Tabla de RN hospitalizados con código de colores */}
-        <div className="tarjeta">
-          <h2 className="texto-2xl font-bold mb-4">Recién Nacidos Hospitalizados</h2>
-          {partosRecientes.length === 0 ? (
-            <p className="texto-centro texto-gris py-6">No hay partos registrados</p>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table className="tabla">
-                <thead>
-                  <tr>
-                    <th>ID Recién Nacido</th>
-                    <th>Madre</th>
-                    <th>RUT Madre</th>
-                    <th>Fecha Ingreso</th>
-                    <th>Días</th>
-                    <th>Tipo</th>
-                    {usuario.rol !== 'administrativo' && (
-                      <>
-                        <th>Peso</th>
-                        <th>APGAR</th>
-                      </>
-                    )}
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {partosRecientes.map(parto => {
-                    const madre = madres.find(m => m.id === parto.madreId);
-                    const diasHospitalizacion = calcularDiasHospitalizacion(parto.fechaIngreso);
-                    const esAlerta = diasHospitalizacion > 7;
-                    
-                    return (
-                      <tr 
-                        key={parto.id}
-                        style={{ 
-                          backgroundColor: esAlerta ? '#fee2e2' : 'transparent'
-                        }}
-                      >
-                        <td className="font-semibold">{parto.rnId}</td>
-                        <td>{madre?.nombre || 'N/A'}</td>
-                        <td>{madre?.rut || 'N/A'}</td>
-                        <td>{new Date(parto.fechaIngreso).toLocaleDateString('es-CL')}</td>
+        {/* Tabla de RN hospitalizados - Solo si tiene permiso de ver partos */}
+        {tienePermiso('verPartos') && (
+          <div className="tarjeta">
+            <h2 className="texto-2xl font-bold mb-4">Recién Nacidos Hospitalizados</h2>
+            {partosRecientes.length === 0 ? (
+              <p className="texto-centro texto-gris py-6">No hay partos registrados</p>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table className="tabla">
+                  <thead>
+                    <tr>
+                      <th>ID Recién Nacido</th>
+                      <th>Madre</th>
+                      <th>RUT Madre</th>
+                      <th>Fecha Ingreso</th>
+                      <th>Días</th>
+                      <th>Tipo</th>
+                      <th>Peso</th>
+                      <th>APGAR</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {partosRecientes.map(parto => {
+                      const madre = madres.find(m => m.id === parto.madreId);
+                      const diasHospitalizacion = calcularDiasHospitalizacion(parto.fechaIngreso);
+                      const esAlerta = diasHospitalizacion > 7;
+                      
+                      return (
+                        <tr 
+                          key={parto.id}
+                          style={{ 
+                            backgroundColor: esAlerta ? '#fee2e2' : 'transparent'
+                          }}
+                        >
+                          <td className="font-semibold">{parto.rnId}</td>
+                          <td>{madre?.nombre || 'N/A'}</td>
+                          <td>{madre?.rut || 'N/A'}</td>
+                          <td>{new Date(parto.fechaIngreso).toLocaleDateString('es-CL')}</td>
+                          <td>
+                            <span style={{
+                              padding: '0.25rem 0.5rem',
+                              borderRadius: '4px',
+                              fontSize: '0.875rem',
+                              fontWeight: 'bold',
+                              backgroundColor: esAlerta ? '#dc2626' : '#10b981',
+                              color: 'white'
+                            }}>
+                              {diasHospitalizacion} días
+                            </span>
+                          </td>
+                          <td>
+                            <span style={{
+                              padding: '0.25rem 0.75rem',
+                              borderRadius: '9999px',
+                              fontSize: '0.875rem',
+                              backgroundColor: parto.tipo === 'Cesárea' ? '#fef3c7' : '#d1fae5',
+                              color: parto.tipo === 'Cesárea' ? '#92400e' : '#065f46'
+                            }}>
+                              {parto.tipo}
+                            </span>
+                          </td>
+                          <td>{parto.pesoRN}g</td>
+                          <td>{parto.apgar1}/{parto.apgar5}</td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                              {tienePermiso('generarPDF') && (
+                                <button
+                                  onClick={() => mostrarVistaPreviaPDF(parto)}
+                                  className="boton"
+                                  style={{
+                                    padding: '0.5rem',
+                                    backgroundColor: '#3b82f6',
+                                    color: 'white'
+                                  }}
+                                  title="Vista previa del brazalete"
+                                >
+                                  <Eye size={18} />
+                                </button>
+                              )}
+
+                              {tienePermiso('generarPDF') && (
+                                <button
+                                  onClick={() => {
+                                    const madreInfo = madres.find(m => m.id === parto.madreId);
+                                    imprimirBrazalete(parto, madreInfo);
+                                  }}
+                                  className="boton"
+                                  style={{
+                                    padding: '0.5rem',
+                                    backgroundColor: '#10b981',
+                                    color: 'white'
+                                  }}
+                                  title="Imprimir brazalete"
+                                >
+                                  <Printer size={18} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Vista solo para administrativos - Lista de madres */}
+        {tienePermiso('verMadres') && !tienePermiso('verPartos') && (
+          <div className="tarjeta">
+            <h2 className="texto-2xl font-bold mb-4">Listado de Madres</h2>
+            {madres.length === 0 ? (
+              <p className="texto-centro texto-gris py-6">No hay madres registradas</p>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table className="tabla">
+                  <thead>
+                    <tr>
+                      <th>RUT</th>
+                      <th>Nombre</th>
+                      <th>Edad</th>
+                      <th>Teléfono</th>
+                      <th>Previsión</th>
+                      <th>Fecha Ingreso</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {madres.map(madre => (
+                      <tr key={madre.id}>
+                        <td className="font-semibold">{madre.rut}</td>
+                        <td>{madre.nombre}</td>
+                        <td>{madre.edad} años</td>
+                        <td>{madre.telefono}</td>
+                        <td>{madre.prevision}</td>
+                        <td>{new Date(madre.fechaIngreso).toLocaleDateString('es-CL')}</td>
                         <td>
-                          <span style={{
-                            padding: '0.25rem 0.5rem',
-                            borderRadius: '4px',
-                            fontSize: '0.875rem',
-                            fontWeight: 'bold',
-                            backgroundColor: esAlerta ? '#dc2626' : '#10b981',
-                            color: 'white'
-                          }}>
-                            {diasHospitalizacion} días
-                          </span>
-                        </td>
-                        <td>
-                          <span style={{
-                            padding: '0.25rem 0.75rem',
-                            borderRadius: '9999px',
-                            fontSize: '0.875rem',
-                            backgroundColor: parto.tipo === 'Cesárea' ? '#fef3c7' : '#d1fae5',
-                            color: parto.tipo === 'Cesárea' ? '#92400e' : '#065f46'
-                          }}>
-                            {parto.tipo}
-                          </span>
-                        </td>
-                        {usuario.rol !== 'administrativo' && (
-                          <>
-                            <td>{parto.pesoRN}g</td>
-                            <td>{parto.apgar1}/{parto.apgar5}</td>
-                          </>
-                        )}
-                        <td>
-                          <div style={{ display: 'flex', gap: '0.5rem' 
-                          }}>
-                            {usuario.rol !== 'administrativo' && (
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
                             <button
-    onClick={() => mostrarVistaPreviaPDF(parto)}
-    className="boton"
-    style={{
-      padding: '0.5rem',
-      backgroundColor: '#3b82f6',
-      color: 'white'
-    }}
-    title="Vista previa del brazalete"
-  >
-    <Eye size={18} />
-  </button>
-  )}
-
-  {usuario.rol === 'administrativo' && (
-    <button
-      onClick={() => setVistaPreviaMadre(madre)}
-      className="boton"
-      style={{
-        padding: '0.5rem',
-        backgroundColor: '#6366f1',
-        color: 'white'
-      }}
-      title="Vista previa de la madre"
-    >
-      <Eye size={18} />
-    </button>
-  )}
-  {usuario.rol === 'administrativo' ? (
-    <button
-      onClick={() => {
-        setMadreSeleccionada(madre); // o madres.find(...) según tu lógica
-        setPantallaActual('editar-madre');
-      }}
-      className="boton"
-      style={{
-        padding: '0.5rem',
-        backgroundColor: '#f59e0b', // Ejemplo color diferente para distinguir la acción administrativa
-        color: 'white'
-      }}
-      title="Actualizar información de la madre"
-    >
-      <User size={18} />
-    </button>
-  ) : (
-    <button
-      onClick={() => {
-        const madreInfo = madres.find(m => m.id === parto.madreId);
-        imprimirBrazalete(parto, madreInfo);
-      }}
-      className="boton"
-      style={{
-        padding: '0.5rem',
-        backgroundColor: '#10b981',
-        color: 'white'
-      }}
-      title="Imprimir brazalete"
-    >
-      <Printer size={18} />
-    </button>
-  )}
+                              onClick={() => setVistaPreviaMadre(madre)}
+                              className="boton"
+                              style={{
+                                padding: '0.5rem',
+                                backgroundColor: '#6366f1',
+                                color: 'white'
+                              }}
+                              title="Ver información completa"
+                            >
+                              <Eye size={18} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setMadreSeleccionada(madre);
+                                setPantallaActual('editar-madre');
+                              }}
+                              className="boton"
+                              style={{
+                                padding: '0.5rem',
+                                backgroundColor: '#f59e0b',
+                                color: 'white'
+                              }}
+                              title="Editar información"
+                            >
+                              <User size={18} />
+                            </button>
                           </div>
                         </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
 
-        {/* Lista de madres sin parto registrado */}
-        {usuario.rol === 'matrona' && (
+        {/* Lista de madres sin parto registrado - Solo para matrona */}
+        {tienePermiso('registrarPartos') && (
           <div className="tarjeta mt-6">
             <h3 className="texto-xl font-bold mb-4">Madres sin Parto Registrado</h3>
             {madres.filter(madre => !partos.some(p => p.madreId === madre.id)).length === 0 ? (
@@ -697,6 +832,7 @@ const App = () => {
           />
           {errores.nombre && <p className="mensaje-error">{errores.nombre}</p>}
         </div>
+        
         <div className="grupo-input">
           <label className="etiqueta">Dirección</label>
           <input
@@ -707,6 +843,7 @@ const App = () => {
             onChange={(e) => setDatos({ ...datos, direccion: e.target.value })}
           />
         </div>
+        
         <div className="grupo-input">
           <label className="etiqueta">Edad *</label>
           <input
@@ -720,16 +857,18 @@ const App = () => {
           />
           {errores.edad && <p className="mensaje-error">{errores.edad}</p>}
         </div>
+        
         <div className="grupo-input">
           <label className="etiqueta">Teléfono de Contacto</label>
           <input 
-            type="number"
+            type="tel"
             className="input"
             placeholder="Número de teléfono"
             value={datos.telefono}
             onChange={(e) => setDatos({ ...datos, telefono: e.target.value })}
           />
         </div>
+        
         <div className="grupo-input">
           <label className="etiqueta">Previsión de Salud</label>
           <input
@@ -740,6 +879,7 @@ const App = () => {
             onChange={(e) => setDatos({ ...datos, prevision: e.target.value })}
           />
         </div>
+        
         <div className="grupo-input">
           <label className="etiqueta">Antecedentes Médicos</label>
           <textarea
@@ -767,7 +907,7 @@ const App = () => {
     );
   };
 
-  // Formulario de registro de parto con MEJORAS UAT
+  // Formulario de registro de parto
   const FormularioParto = () => {
     const [datos, setDatos] = useState({
       tipo: 'Vaginal',
@@ -883,8 +1023,6 @@ const App = () => {
             />
             {errores.tallaRN && <p className="mensaje-error">{errores.tallaRN}</p>}
           </div>
-          
-          {/* MEJORA UAT: Tooltips en APGAR */}
           <div className="grupo-input">
             <label className="etiqueta" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               APGAR 1 min *
@@ -941,8 +1079,6 @@ const App = () => {
             {errores.apgar5 && <p className="mensaje-error">{errores.apgar5}</p>}
           </div>
         </div>
-
-        {/* MEJORA UAT: Campo de Corticoides */}
         <div className="grupo-input">
           <label className="etiqueta">¿La madre recibió corticoides durante la gestación? *</label>
           <div style={{ display: 'flex', gap: '2rem', marginTop: '0.5rem' }}>
@@ -1004,6 +1140,7 @@ const App = () => {
     <div style={{ minHeight: '100vh', backgroundColor: '#f3f4f6' }}>
       {alerta && <AlertaFlotante mensaje={alerta.mensaje} tipo={alerta.tipo} />}
       {vistaPrevia && <VistaPreviaBrazalete />}
+      {vistaPreviaMadre && <VistaPreviaMadre />}
       
       <nav style={{
         backgroundColor: '#2563eb',
@@ -1032,35 +1169,35 @@ const App = () => {
                 Inicio
               </button>
               
-              {(usuario?.rol === 'medico') && (
-              <button 
-              onClick={() => setPantallaActual('reporteREM')}
-              className='boton'
-              style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: 'white' }}
-              >
-                <FileText size={18} />
-                  Reporte REM Neonatal
-              </button>
+              {tienePermiso('verEstadisticas') && usuario?.rol === ROLES.MEDICO && (
+                <button 
+                  onClick={() => setPantallaActual('reporteREM')}
+                  className='boton'
+                  style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: 'white' }}
+                >
+                  <BarChart3 size={18} />
+                  Reporte REM
+                </button>
               )}
               
-              {(usuario?.rol === 'administrativo' || usuario?.rol === 'matrona') && (
+              {tienePermiso('registrarMadres') && (
                 <button
                   onClick={() => setPantallaActual('admision')}
                   className="boton"
                   style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: 'white' }}
                 >
-                  <User size={20} />
+                  <PlusCircle size={20} />
                   Nueva Admisión
                 </button>
               )}
 
-              {(usuario?.rol === 'enfermera') && (
+              {usuario?.rol === ROLES.ENFERMERA && (
                 <button
                   onClick={() => setPantallaActual('notas-enfermera')}
                   className="boton"
                   style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: 'white' }}
                 >
-                  <User size={20} />
+                  <FileText size={20} />
                   Notas Enfermera
                 </button>
               )}
@@ -1092,9 +1229,6 @@ const App = () => {
         <p className="texto-sm" style={{ opacity: 0.8, marginTop: '0.5rem' }}>
           Hospital Clínico Herminda Martín - Chillán, Chile
         </p>
-        <p className="texto-xs" style={{ opacity: 0.6, marginTop: '0.5rem' }}>
-          
-        </p>
       </footer>
     </div>
   );
@@ -1105,48 +1239,50 @@ const App = () => {
   }
 
   return (
-  <Layout>
-    {pantallaActual === 'dashboard' && (
-      <>
-        <Dashboard />
-        {/* Aquí agregas la tabla ade auditoría */}
-        <h2>Historial de Auditoría</h2>
-        <TablaAuditoria />
-      </>
-    )}
-    {pantallaActual === 'editar-madre' && madreSeleccionada && (
-      <EditarMadre
-        madre={madreSeleccionada}
-        onGuardar={datosActualizados => {
-          // Actualiza la madre en el estado de madres
-          setMadres(madres.map(m =>
-            m.id === madreSeleccionada.id ? { ...m, ...datosActualizados } : m
-          ));
-          setMadreSeleccionada(null);
-          setPantallaActual('dashboard');
-          mostrarAlerta('Datos actualizados correctamente', 'success');
-        }}
-        onCancelar={() => {
-          setMadreSeleccionada(null);
-          setPantallaActual('dashboard');
-        }}
-      />
-    )}
+    <Layout>
+      {pantallaActual === 'dashboard' && (
+        <>
+          <Dashboard />
+          {usuario?.rol === ROLES.ADMIN_SISTEMA && (
+            <>
+              <h2 className="texto-2xl font-bold mt-6 mb-4">Historial de Auditoría</h2>
+              <TablaAuditoria />
+            </>
+          )}
+        </>
+      )}
+      {pantallaActual === 'editar-madre' && madreSeleccionada && (
+        <EditarMadre
+          madre={madreSeleccionada}
+          onGuardar={datosActualizados => {
+            setMadres(madres.map(m =>
+              m.id === madreSeleccionada.id ? { ...m, ...datosActualizados } : m
+            ));
+            setMadreSeleccionada(null);
+            setPantallaActual('dashboard');
+            mostrarAlerta(MENSAJES.exito.datosActualizados, 'success');
+          }}
+          onCancelar={() => {
+            setMadreSeleccionada(null);
+            setPantallaActual('dashboard');
+          }}
+        />
+      )}
 
-    {pantallaActual === 'reporteREM' && <ReporteREM partos={partos} madres={madres} />}
-    {pantallaActual === 'admision' && <FormularioAdmision />}
-    {pantallaActual === 'registrar-parto' && <FormularioParto />}
-    {pantallaActual === 'notas-enfermera' && usuario.rol === 'enfermera' && (
-  <NotasEnfermera
-    notas={notasEnfermera}
-    setNotas={setNotasEnfermera}
-    usuario={usuario}
-  />
-)}
-
-  </Layout>
-);
+      {pantallaActual === 'reporteREM' && tienePermiso('verEstadisticas') && (
+        <ReporteREM partos={partos} madres={madres} />
+      )}
+      {pantallaActual === 'admision' && tienePermiso('registrarMadres') && <FormularioAdmision />}
+      {pantallaActual === 'registrar-parto' && tienePermiso('registrarPartos') && <FormularioParto />}
+      {pantallaActual === 'notas-enfermera' && usuario.rol === ROLES.ENFERMERA && (
+        <NotasEnfermera
+          notas={notasEnfermera}
+          setNotas={setNotasEnfermera}
+          usuario={usuario}
+        />
+      )}
+    </Layout>
+  );
 };
-
 
 export default App;
