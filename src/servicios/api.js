@@ -396,25 +396,107 @@ export const verificarEstadoSolicitudRUT = async (solicitudId) => {
  * Obtiene logs de auditoría
  */
 // Muestra solo los eventos de la sesión en curso (se borra si recargas o navegas) simulacion
-export const obtenerLogsAuditoria = async () => {
-  await simularDelay(100);
-  return { exito: true, datos: logsAuditoriaMock, total: logsAuditoriaMock.length };
+// src/servicios/api.js
+// Sistema de auditoría completo con almacenamiento local
+
+let eventosAuditoria = [];
+
+// Registrar evento en auditoría
+export const registrarEventoAuditoria = (evento) => {
+  const eventoCompleto = {
+    id: Date.now() + Math.random(),
+    timestamp: new Date().toISOString(),
+    fecha: new Date().toLocaleString('es-CL'),
+    ...evento
+  };
+  
+  eventosAuditoria.push(eventoCompleto);
+  
+  // Log en consola para debugging
+  console.log('📋 Evento de Auditoría:', eventoCompleto);
+  
+  return eventoCompleto;
 };
 
-/**
- * Registra un evento de auditoría
- */
-// Guarda logs de auditoría en localStorage
-let logsAuditoriaMock = [];
+// Obtener todos los eventos de auditoría
+export const obtenerEventosAuditoria = () => {
+  return [...eventosAuditoria].reverse(); // Más recientes primero
+};
 
-// Función simula el registro: agrega a array temporal y retorna éxito
-export const registrarEventoAuditoria = async (evento) => {
-  await simularDelay(100);
-  logsAuditoriaMock.push({
-    ...evento,
-    fecha_hora: new Date().toISOString()
+// Obtener eventos por usuario
+export const obtenerEventosPorUsuario = (nombreUsuario) => {
+  return eventosAuditoria
+    .filter(evento => evento.usuario === nombreUsuario)
+    .reverse();
+};
+
+// Obtener eventos por acción
+export const obtenerEventosPorAccion = (accion) => {
+  return eventosAuditoria
+    .filter(evento => evento.accion === accion)
+    .reverse();
+};
+
+// Obtener eventos en un rango de fechas
+export const obtenerEventosPorFecha = (fechaInicio, fechaFin) => {
+  const inicio = new Date(fechaInicio).getTime();
+  const fin = new Date(fechaFin).getTime();
+  
+  return eventosAuditoria
+    .filter(evento => {
+      const fechaEvento = new Date(evento.timestamp).getTime();
+      return fechaEvento >= inicio && fechaEvento <= fin;
+    })
+    .reverse();
+};
+
+// Limpiar auditoría (solo para testing)
+export const limpiarAuditoria = () => {
+  eventosAuditoria = [];
+  console.log('🗑️ Auditoría limpiada');
+};
+
+// Exportar auditoría a JSON
+export const exportarAuditoriaJSON = () => {
+  const dataStr = JSON.stringify(eventosAuditoria, null, 2);
+  const dataBlob = new Blob([dataStr], { type: 'application/json' });
+  const url = URL.createObjectURL(dataBlob);
+  
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `auditoria_${new Date().toISOString().split('T')[0]}.json`;
+  link.click();
+  
+  console.log('📥 Auditoría exportada');
+};
+
+// Obtener estadísticas de auditoría
+export const obtenerEstadisticasAuditoria = () => {
+  const totalEventos = eventosAuditoria.length;
+  const eventosPorAccion = {};
+  const eventosPorUsuario = {};
+  
+  eventosAuditoria.forEach(evento => {
+    // Por acción
+    if (!eventosPorAccion[evento.accion]) {
+      eventosPorAccion[evento.accion] = 0;
+    }
+    eventosPorAccion[evento.accion]++;
+    
+    // Por usuario
+    if (!eventosPorUsuario[evento.usuario]) {
+      eventosPorUsuario[evento.usuario] = 0;
+    }
+    eventosPorUsuario[evento.usuario]++;
   });
-  return { exito: true };
+  
+  return {
+    totalEventos,
+    eventosPorAccion,
+    eventosPorUsuario,
+    primerEvento: eventosAuditoria[0]?.timestamp,
+    ultimoEvento: eventosAuditoria[eventosAuditoria.length - 1]?.timestamp
+  };
 };
 
 // ============== MANEJO DE ERRORES ==============
@@ -458,6 +540,5 @@ export default {
   verificarEstadoSolicitudRUT,
   
   // Auditoría
-  obtenerLogsAuditoria,
   registrarEventoAuditoria,
 };

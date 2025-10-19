@@ -1,301 +1,63 @@
-// src/componentes/GestionUsuarios.js
+// src/componentes/AnexarCorreccion.js
 import React, { useState } from 'react';
-import { User, Shield, UserPlus, Edit2, UserX, Key, Save, X } from 'lucide-react';
-import { ROLES, TURNOS, MENSAJES } from '../utilidades/constantes';
+import { AlertTriangle, FileText, Save, X, Clock } from 'lucide-react';
+import { MENSAJES } from '../utilidades/constantes';
 
-const GestionUsuarios = ({ usuarios = [], onGuardarUsuario, onDesactivarUsuario, mostrarAlerta }) => {
-  const [modoEdicion, setModoEdicion] = useState(false);
-  const [usuarioEditando, setUsuarioEditando] = useState(null);
-  const [formulario, setFormulario] = useState({
-    nombre: '',
-    username: '',
-    rol: ROLES.ENFERMERA,
-    turno: TURNOS.DIURNO,
-    activo: true
+const AnexarCorreccion = ({ parto, madre, onGuardar, onCancelar }) => {
+  const [correccion, setCorreccion] = useState({
+    campo: '',
+    valorOriginal: '',
+    valorNuevo: '',
+    justificacion: ''
   });
 
-  const iniciarNuevoUsuario = () => {
-    setFormulario({
-      nombre: '',
-      username: '',
-      rol: ROLES.ENFERMERA,
-      turno: TURNOS.DIURNO,
-      activo: true
-    });
-    setUsuarioEditando(null);
-    setModoEdicion(true);
-  };
+  const camposEditables = [
+    { valor: 'pesoRN', etiqueta: 'Peso del RN', valorActual: parto.pesoRN + 'g' },
+    { valor: 'tallaRN', etiqueta: 'Talla del RN', valorActual: parto.tallaRN + 'cm' },
+    { valor: 'apgar1', etiqueta: 'APGAR 1 min', valorActual: parto.apgar1 },
+    { valor: 'apgar5', etiqueta: 'APGAR 5 min', valorActual: parto.apgar5 },
+    { valor: 'tipo', etiqueta: 'Tipo de Parto', valorActual: parto.tipo },
+    { valor: 'fecha', etiqueta: 'Fecha', valorActual: parto.fecha },
+    { valor: 'hora', etiqueta: 'Hora', valorActual: parto.hora },
+    { valor: 'observaciones', etiqueta: 'Observaciones', valorActual: parto.observaciones || 'Sin observaciones' }
+  ];
 
-  const iniciarEdicion = (usuario) => {
-    setFormulario({
-      nombre: usuario.nombre,
-      username: usuario.username,
-      rol: usuario.rol,
-      turno: usuario.turno || TURNOS.DIURNO,
-      activo: usuario.activo
+  const handleCampoChange = (campo) => {
+    const campoSeleccionado = camposEditables.find(c => c.valor === campo);
+    setCorreccion({
+      ...correccion,
+      campo,
+      valorOriginal: campoSeleccionado?.valorActual || '',
+      valorNuevo: ''
     });
-    setUsuarioEditando(usuario);
-    setModoEdicion(true);
   };
 
   const handleGuardar = () => {
-    if (!formulario.nombre || !formulario.username) {
-      mostrarAlerta(MENSAJES.error.camposObligatorios, 'error');
+    if (!correccion.campo || !correccion.valorNuevo || !correccion.justificacion) {
+      alert(MENSAJES.error.camposObligatorios);
       return;
     }
 
-    const datosUsuario = {
-      ...formulario,
-      id: usuarioEditando?.id || Date.now()
+    if (correccion.justificacion.length < 20) {
+      alert('La justificación debe tener al menos 20 caracteres');
+      return;
+    }
+
+    const datosCorreccion = {
+      ...correccion,
+      fecha: new Date().toISOString(),
+      partoId: parto.id,
+      madreId: madre.id
     };
 
-    onGuardarUsuario(datosUsuario);
-    setModoEdicion(false);
-    setFormulario({
-      nombre: '',
-      username: '',
-      rol: ROLES.ENFERMERA,
-      turno: TURNOS.DIURNO,
-      activo: true
-    });
+    onGuardar(datosCorreccion);
   };
-
-  const handleDesactivar = (usuario) => {
-    if (window.confirm(`¿Está seguro de desactivar al usuario ${usuario.nombre}?`)) {
-      onDesactivarUsuario(usuario.id);
-    }
-  };
-
-  const rolesConTurno = [ROLES.ENFERMERA, ROLES.MATRONA];
 
   return (
-    <div className="tarjeta">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h2 className="texto-2xl font-bold">Gestión de Usuarios</h2>
-          <p className="texto-sm texto-gris mt-1">
-            Administración de cuentas y asignación de roles
-          </p>
-        </div>
-        {!modoEdicion && (
-          <button
-            onClick={iniciarNuevoUsuario}
-            className="boton boton-primario"
-          >
-            <UserPlus size={20} />
-            Nuevo Usuario
-          </button>
-        )}
-      </div>
-
-      {modoEdicion ? (
-        <div className="p-6" style={{ backgroundColor: '#f9fafb', borderRadius: '0.5rem' }}>
-          <h3 className="texto-xl font-bold mb-4">
-            {usuarioEditando ? 'Editar Usuario' : 'Nuevo Usuario'}
-          </h3>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grupo-input">
-              <label className="etiqueta">Nombre Completo *</label>
-              <input
-                type="text"
-                className="input"
-                placeholder="Juan Pérez"
-                value={formulario.nombre}
-                onChange={(e) => setFormulario({ ...formulario, nombre: e.target.value })}
-              />
-            </div>
-
-            <div className="grupo-input">
-              <label className="etiqueta">Usuario (Login) *</label>
-              <input
-                type="text"
-                className="input"
-                placeholder="jperez"
-                value={formulario.username}
-                onChange={(e) => setFormulario({ ...formulario, username: e.target.value })}
-                disabled={!!usuarioEditando}
-              />
-            </div>
-
-            <div className="grupo-input">
-              <label className="etiqueta">Rol *</label>
-              <select
-                className="select"
-                value={formulario.rol}
-                onChange={(e) => setFormulario({ ...formulario, rol: e.target.value })}
-              >
-                <option value={ROLES.ADMINISTRATIVO}>Administrativo</option>
-                <option value={ROLES.ENFERMERA}>Enfermera</option>
-                <option value={ROLES.MATRONA}>Matrona</option>
-                <option value={ROLES.MEDICO}>Médico</option>
-                <option value={ROLES.ADMIN_SISTEMA}>Admin Sistema</option>
-              </select>
-            </div>
-
-            {rolesConTurno.includes(formulario.rol) && (
-              <div className="grupo-input">
-                <label className="etiqueta">Turno Asignado *</label>
-                <select
-                  className="select"
-                  value={formulario.turno}
-                  onChange={(e) => setFormulario({ ...formulario, turno: e.target.value })}
-                >
-                  <option value={TURNOS.DIURNO}>Diurno (08:00 - 20:00)</option>
-                  <option value={TURNOS.NOCTURNO}>Nocturno (20:00 - 08:00)</option>
-                  <option value={TURNOS.VESPERTINO}>Vespertino (14:00 - 22:00)</option>
-                </select>
-                <p className="texto-xs texto-gris mt-1">
-                  ⚠️ Este usuario solo verá pacientes de su turno asignado
-                </p>
-              </div>
-            )}
-
-            {usuarioEditando && (
-              <div className="grupo-input">
-                <label className="etiqueta">Estado</label>
-                <select
-                  className="select"
-                  value={formulario.activo ? 'activo' : 'inactivo'}
-                  onChange={(e) => setFormulario({ ...formulario, activo: e.target.value === 'activo' })}
-                >
-                  <option value="activo">Activo</option>
-                  <option value="inactivo">Inactivo</option>
-                </select>
-              </div>
-            )}
-          </div>
-
-          <div className="flex gap-3 mt-6">
-            <button
-              onClick={handleGuardar}
-              className="boton boton-primario"
-              style={{ flex: 1 }}
-            >
-              <Save size={20} />
-              Guardar Usuario
-            </button>
-            <button
-              onClick={() => setModoEdicion(false)}
-              className="boton boton-gris"
-              style={{ flex: 1 }}
-            >
-              <X size={20} />
-              Cancelar
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table className="tabla">
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Usuario</th>
-                <th>Rol</th>
-                <th>Turno</th>
-                <th>Estado</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {usuarios.length === 0 ? (
-                <tr>
-                  <td colSpan="6" className="texto-centro texto-gris py-6">
-                    No hay usuarios registrados
-                  </td>
-                </tr>
-              ) : (
-                usuarios.map((usuario) => (
-                  <tr key={usuario.id}>
-                    <td className="font-semibold">{usuario.nombre}</td>
-                    <td>{usuario.username}</td>
-                    <td>
-                      <span
-                        style={{
-                          padding: '0.25rem 0.75rem',
-                          borderRadius: '9999px',
-                          fontSize: '0.875rem',
-                          backgroundColor: 
-                            usuario.rol === ROLES.MEDICO ? '#dbeafe' :
-                            usuario.rol === ROLES.MATRONA ? '#dcfce7' :
-                            usuario.rol === ROLES.ENFERMERA ? '#fef3c7' :
-                            usuario.rol === ROLES.ADMIN_SISTEMA ? '#e0e7ff' :
-                            '#f3f4f6',
-                          color: 
-                            usuario.rol === ROLES.MEDICO ? '#1e40af' :
-                            usuario.rol === ROLES.MATRONA ? '#166534' :
-                            usuario.rol === ROLES.ENFERMERA ? '#92400e' :
-                            usuario.rol === ROLES.ADMIN_SISTEMA ? '#4338ca' :
-                            '#374151'
-                        }}
-                      >
-                        {usuario.rol.charAt(0).toUpperCase() + usuario.rol.slice(1)}
-                      </span>
-                    </td>
-                    <td>
-                      {rolesConTurno.includes(usuario.rol) ? (
-                        <span className="texto-sm">
-                          {usuario.turno?.charAt(0).toUpperCase() + usuario.turno?.slice(1) || '-'}
-                        </span>
-                      ) : (
-                        <span className="texto-sm texto-gris">N/A</span>
-                      )}
-                    </td>
-                    <td>
-                      <span
-                        style={{
-                          padding: '0.25rem 0.5rem',
-                          borderRadius: '4px',
-                          fontSize: '0.75rem',
-                          fontWeight: 'bold',
-                          backgroundColor: usuario.activo ? '#10b981' : '#ef4444',
-                          color: 'white'
-                        }}
-                      >
-                        {usuario.activo ? 'Activo' : 'Inactivo'}
-                      </span>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button
-                          onClick={() => iniciarEdicion(usuario)}
-                          className="boton"
-                          style={{
-                            padding: '0.5rem',
-                            backgroundColor: '#3b82f6',
-                            color: 'white'
-                          }}
-                          title="Editar usuario"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleDesactivar(usuario)}
-                          className="boton"
-                          style={{
-                            padding: '0.5rem',
-                            backgroundColor: '#ef4444',
-                            color: 'white'
-                          }}
-                          title="Desactivar usuario"
-                          disabled={!usuario.activo}
-                        >
-                          <UserX size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Información importante */}
+    <div className="tarjeta animacion-entrada" style={{ maxWidth: '900px', margin: '0 auto' }}>
+      {/* Advertencia importante */}
       <div
-        className="mt-6 p-4"
+        className="mb-6 p-4"
         style={{
           backgroundColor: '#fef3c7',
           borderLeft: '4px solid #f59e0b',
@@ -303,22 +65,174 @@ const GestionUsuarios = ({ usuarios = [], onGuardarUsuario, onDesactivarUsuario,
         }}
       >
         <div className="flex items-start gap-3">
-          <Shield size={20} style={{ color: '#f59e0b', marginTop: '2px' }} />
+          <AlertTriangle size={24} style={{ color: '#f59e0b', flexShrink: 0 }} />
           <div>
             <p className="font-semibold" style={{ color: '#92400e' }}>
-              Principio de Segmentación RBAC
+              Anexar Corrección - Trazabilidad Completa
             </p>
-            <ul className="texto-sm mt-2" style={{ color: '#92400e', listStyle: 'disc', marginLeft: '1.5rem' }}>
-              <li>Enfermeras y Matronas solo acceden a pacientes de su turno</li>
-              <li>Administrativos NO ven datos clínicos (solo demográficos)</li>
-              <li>Admin Sistema NO accede a datos de pacientes</li>
-              <li>Todos los cambios quedan registrados en auditoría</li>
-            </ul>
+            <p className="texto-sm mt-1" style={{ color: '#92400e' }}>
+              Esta acción NO sobrescribe el dato original. Se anexa una corrección que queda
+              registrada en auditoría con justificación. El valor original permanece visible
+              en el historial.
+            </p>
           </div>
         </div>
+      </div>
+
+      <h2 className="texto-2xl font-bold mb-4">Anexar Corrección a Registro de Parto</h2>
+
+      {/* Información del parto */}
+      <div className="mb-6 p-4" style={{ backgroundColor: '#dbeafe', borderRadius: '0.5rem' }}>
+        <h3 className="font-semibold mb-2">Información del Registro</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="texto-sm texto-gris">Madre</p>
+            <p className="font-semibold">{madre.nombre}</p>
+            <p className="texto-sm texto-gris">RUT: {madre.rut}</p>
+          </div>
+          <div>
+            <p className="texto-sm texto-gris">Recién Nacido</p>
+            <p className="font-semibold">{parto.rnId}</p>
+            <p className="texto-sm texto-gris">
+              Registrado: {new Date(parto.fechaRegistro).toLocaleString('es-CL')}
+            </p>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center gap-2 p-2" style={{ backgroundColor: '#fff', borderRadius: '4px' }}>
+          <Clock size={16} style={{ color: '#6b7280' }} />
+          <span className="texto-sm texto-gris">
+            Registrado por: <strong>{parto.registradoPor}</strong>
+          </span>
+        </div>
+      </div>
+
+      {/* Formulario de corrección */}
+      <div className="grid gap-4">
+        <div className="grupo-input">
+          <label className="etiqueta">Campo a Corregir *</label>
+          <select
+            className="select"
+            value={correccion.campo}
+            onChange={(e) => handleCampoChange(e.target.value)}
+          >
+            <option value="">Seleccione un campo...</option>
+            {camposEditables.map((campo) => (
+              <option key={campo.valor} value={campo.valor}>
+                {campo.etiqueta}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {correccion.campo && (
+          <>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grupo-input">
+                <label className="etiqueta">Valor Original (No se modificará)</label>
+                <input
+                  type="text"
+                  className="input"
+                  value={correccion.valorOriginal}
+                  disabled
+                  style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
+                />
+              </div>
+
+              <div className="grupo-input">
+                <label className="etiqueta">Valor Corregido *</label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="Ingrese el valor correcto"
+                  value={correccion.valorNuevo}
+                  onChange={(e) => setCorreccion({ ...correccion, valorNuevo: e.target.value })}
+                  style={{ borderColor: '#10b981', borderWidth: '2px' }}
+                />
+              </div>
+            </div>
+
+            <div className="grupo-input">
+              <label className="etiqueta">Justificación de la Corrección *</label>
+              <textarea
+                className="textarea"
+                rows="4"
+                placeholder="Describa detalladamente el motivo de la corrección (mínimo 20 caracteres)"
+                value={correccion.justificacion}
+                onChange={(e) => setCorreccion({ ...correccion, justificacion: e.target.value })}
+                style={{ borderColor: '#10b981', borderWidth: '2px' }}
+              />
+              <p className="texto-xs texto-gris mt-1">
+                {correccion.justificacion.length}/500 caracteres
+              </p>
+            </div>
+
+            {/* Vista previa de la corrección */}
+            <div
+              className="p-4"
+              style={{
+                backgroundColor: '#f0fdf4',
+                border: '2px solid #10b981',
+                borderRadius: '0.5rem'
+              }}
+            >
+              <h4 className="font-semibold mb-2" style={{ color: '#065f46' }}>
+                Vista Previa de la Corrección
+              </h4>
+              <div className="texto-sm">
+                <p>
+                  <strong>Campo:</strong>{' '}
+                  {camposEditables.find(c => c.valor === correccion.campo)?.etiqueta}
+                </p>
+                <p className="mt-1">
+                  <strong>Cambio:</strong>{' '}
+                  <span style={{ textDecoration: 'line-through', color: '#ef4444' }}>
+                    {correccion.valorOriginal}
+                  </span>
+                  {' → '}
+                  <span style={{ color: '#10b981', fontWeight: 'bold' }}>
+                    {correccion.valorNuevo || '(pendiente)'}
+                  </span>
+                </p>
+                <p className="mt-1">
+                  <strong>Justificación:</strong> {correccion.justificacion || '(pendiente)'}
+                </p>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Botones de acción */}
+      <div className="flex gap-4 mt-6">
+        <button
+          onClick={handleGuardar}
+          className="boton boton-primario"
+          style={{ flex: 1 }}
+          disabled={!correccion.campo || !correccion.valorNuevo || !correccion.justificacion}
+        >
+          <Save size={20} />
+          Anexar Corrección
+        </button>
+        <button
+          onClick={onCancelar}
+          className="boton boton-gris"
+          style={{ flex: 1 }}
+        >
+          <X size={20} />
+          Cancelar
+        </button>
+      </div>
+
+      {/* Nota legal */}
+      <div className="mt-6 p-3" style={{ backgroundColor: '#f3f4f6', borderRadius: '0.5rem' }}>
+        <p className="texto-xs texto-gris texto-centro">
+          <FileText size={14} style={{ display: 'inline', marginRight: '0.25rem' }} />
+          Esta corrección quedará registrada en auditoría según Ley 20.584 sobre Derechos y
+          Deberes de los Pacientes. El registro original se mantiene intacto.
+        </p>
       </div>
     </div>
   );
 };
 
-export default GestionUsuarios;
+export default AnexarCorreccion;

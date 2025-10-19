@@ -1,5 +1,5 @@
 // src/utilidades/constantes.js
-// Constantes globales del sistema
+// Constantes globales del sistema - Cumplimiento RBAC según Ley 20.584
 
 // Información del sistema
 export const SISTEMA_INFO = {
@@ -14,7 +14,6 @@ export const ROLES = {
   ADMINISTRATIVO: 'administrativo',
   MATRONA: 'matrona',
   MEDICO: 'medico',
-  NEONATOLOGIA: 'neonatologia',
   ENFERMERA: 'enfermera',
   ADMIN_SISTEMA: 'admin_sistema',
 };
@@ -53,6 +52,9 @@ export const RANGOS_MEDICOS = {
 // Timeout de sesión (en milisegundos)
 export const TIMEOUT_SESION = 30 * 60 * 1000; // 30 minutos
 
+// Ventana de edición para matronas (en milisegundos)
+export const VENTANA_EDICION_PARTO = 2 * 60 * 60 * 1000; // 2 horas
+
 // Configuración de paginación
 export const PAGINACION = {
   elementosPorPagina: 10,
@@ -66,7 +68,8 @@ export const MENSAJES = {
     partoRegistrado: 'Parto registrado exitosamente',
     datosActualizados: 'Datos actualizados correctamente',
     pdfGenerado: 'PDF generado correctamente',
-    sesionCerrada: 'Sesión cerrada correctamente'
+    sesionCerrada: 'Sesión cerrada correctamente',
+    correccionAnexada: 'Corrección anexada exitosamente'
   },
   error: {
     rutInvalido: 'El RUT ingresado no es válido',
@@ -74,7 +77,9 @@ export const MENSAJES = {
     rangoInvalido: 'Valor fuera del rango permitido',
     errorServidor: 'Error al comunicarse con el servidor',
     sesionExpirada: 'Sesión expirada por inactividad',
-    sinPermiso: 'No tiene permisos para realizar esta acción'
+    sinPermiso: 'No tiene permisos para realizar esta acción',
+    ventanaEdicionCerrada: 'La ventana de edición de 2 horas ha expirado. Use "Anexar Corrección"',
+    noAsignadoATurno: 'Este paciente no está asignado a su turno'
   },
   advertencia: {
     sesionPorExpirar: 'Su sesión expirará en 5 minutos',
@@ -84,7 +89,8 @@ export const MENSAJES = {
   info: {
     cargando: 'Cargando...',
     procesando: 'Procesando información...',
-    sinResultados: 'No se encontraron resultados'
+    sinResultados: 'No se encontraron resultados',
+    registroCerrado: 'Este registro está cerrado. Solo se pueden anexar correcciones.'
   }
 };
 
@@ -93,7 +99,8 @@ export const ESTADOS = {
   PENDIENTE: 'pendiente',
   EN_PROCESO: 'en_proceso',
   COMPLETADO: 'completado',
-  CANCELADO: 'cancelado'
+  CANCELADO: 'cancelado',
+  CERRADO: 'cerrado' // Después de ventana de edición
 };
 
 // Colores del sistema
@@ -121,68 +128,182 @@ export const API_URLS = {
   produccion: 'https://partos.hermindamartin.cl/api'
 };
 
-// Permisos por rol
+// PERMISOS POR ROL - Cumplimiento RBAC según Ley 20.584
 export const PERMISOS = {
   [ROLES.ADMINISTRATIVO]: {
-    verMadres: true,
-    registrarMadres: true,
-    verPartos: false,
-    registrarPartos: false,
-    editarPartos: false,
-    generarPDF: false,
-    verEstadisticas: false
+    // Datos Demográficos SOLAMENTE
+    verDatosDemograficos: true,
+    crearPaciente: true,
+    editarDatosDemograficos: true,
+    
+    // Datos Clínicos - PROHIBIDO
+    verDatosClinicos: false,
+    verHistorialClinico: false,
+    verPartograma: false,
+    verExamenes: false,
+    verEpicrisis: false,
+    crearRegistroParto: false,
+    editarRegistroParto: false,
+    
+    // Otros
+    generarBrazalete: false,
+    generarReportes: false,
+    verAuditoria: false,
+    gestionarUsuarios: false,
+    verEstadisticas: true, // Solo demográficas
+    accesoPorTurno: false
   },
-  [ROLES.MATRONA]: {
-    verMadres: true,
-    registrarMadres: true,
-    verPartos: true,
-    registrarPartos: true,
-    editarPartos: true,
-    generarPDF: true,
-    verEstadisticas: true
-  },
-  [ROLES.MEDICO]: {
-    verMadres: true,
-    registrarMadres: false,
-    verPartos: true,
-    registrarPartos: false,
-    editarPartos: false,
-    generarPDF: true,
-    verEstadisticas: true
-  },
-  [ROLES.NEONATOLOGIA]: {
-    verMadres: false,
-    registrarMadres: false,
-    verPartos: true,
-    registrarPartos: false,
-    editarPartos: false,
-    generarPDF: true,
-    verEstadisticas: false
-  },
+  
   [ROLES.ENFERMERA]: {
-    verMadres: false,
-    registrarMadres: false,
-    verPartos: false,
-    registrarPartos: false,
-    editarPartos: false,
-    generarPDF: false,
-    verEstadisticas: false
+    // Lectura limitada a turno asignado
+    verDatosDemograficos: true,
+    verDatosClinicos: true,
+    verHistorialClinico: true, // Solo de su turno
+    verPartograma: false,
+    verExamenes: true,
+    verEpicrisis: true,
+    
+    // Creación
+    crearNotasEnfermeria: true,
+    crearSignosVitales: true,
+    crearProfilaxis: true,
+    crearPaciente: false,
+    crearRegistroParto: false,
+    
+    // Edición
+    editarDatosDemograficos: false,
+    editarNotasEnfermeria: true, // Solo las propias
+    editarRegistroParto: false,
+    
+    // Otros
+    generarBrazalete: false,
+    generarReportes: false,
+    verAuditoria: false,
+    gestionarUsuarios: false,
+    verEstadisticas: false,
+    accesoPorTurno: true // CRÍTICO: Solo ve pacientes de su turno
   },
+  
+  [ROLES.MATRONA]: {
+    // Rol clave - "Dueña" del registro de parto
+    verDatosDemograficos: true,
+    verDatosClinicos: true,
+    verHistorialClinico: true, // Solo de su turno
+    verPartograma: true,
+    verExamenes: true,
+    verEpicrisis: true,
+    
+    // Creación
+    crearPaciente: true,
+    crearRegistroParto: true,
+    crearRecienNacido: true,
+    crearPartograma: true,
+    crearNotasEnfermeria: false,
+    
+    // Edición con ventana temporal de 2 horas
+    editarDatosDemograficos: true,
+    editarRegistroParto: true, // Solo dentro de 2 horas
+    editarPartograma: true, // Solo durante parto en curso
+    editarConVentanaTemporal: true, // Flag especial
+    anexarCorreccion: false, // No puede, debe ir a médico
+    
+    // Otros
+    generarBrazalete: true,
+    generarReportes: false, // NO - privilegio elevado
+    verAuditoria: false,
+    gestionarUsuarios: false,
+    verEstadisticas: true,
+    accesoPorTurno: true // CRÍTICO: Solo ve pacientes de su turno
+  },
+  
+  [ROLES.MEDICO]: {
+    // Supervisor - Acceso completo para supervisión
+    verDatosDemograficos: true,
+    verDatosClinicos: true,
+    verHistorialClinico: true, // TODOS los pacientes
+    verPartograma: true,
+    verExamenes: true,
+    verEpicrisis: true,
+    
+    // Creación
+    crearPaciente: false, // No es su función
+    crearRegistroParto: false, // No es su función
+    crearEpicrisis: true,
+    crearIndicacionesMedicas: true,
+    crearDerivacion: true,
+    
+    // Edición
+    editarDatosDemograficos: false,
+    editarRegistroParto: false, // Usa anexarCorreccion en su lugar
+    editarEpicrisis: true,
+    editarIndicacionesMedicas: true,
+    anexarCorreccion: true, // PERMISO ESPECIAL - No sobrescribe, anexa
+    
+    // Privilegios Especiales - MÁXIMO RIESGO
+    generarBrazalete: true,
+    generarReportes: true, // REM, Excel - EXCLUSIVO
+    exportarDatos: true, // EXCLUSIVO
+    verAuditoria: false, // No es admin técnico
+    gestionarUsuarios: false,
+    verEstadisticas: true,
+    accesoPorTurno: false // Ve TODOS los turnos
+  },
+  
   [ROLES.ADMIN_SISTEMA]: {
-    verMadres: true,
-    registrarMadres: true,
-    verPartos: true,
-    registrarPartos: true,
-    editarPartos: true,
-    generarPDF: true,
-    verEstadisticas: true
+    // Rol técnico - NO ACCEDE A DATOS CLÍNICOS
+    verDatosDemograficos: false, // PROHIBIDO
+    verDatosClinicos: false, // PROHIBIDO
+    verHistorialClinico: false, // PROHIBIDO
+    verPartograma: false, // PROHIBIDO
+    verExamenes: false, // PROHIBIDO
+    verEpicrisis: false, // PROHIBIDO
+    
+    // Sin permisos clínicos
+    crearPaciente: false,
+    crearRegistroParto: false,
+    editarDatosDemograficos: false,
+    editarRegistroParto: false,
+    
+    // Funciones técnicas exclusivas
+    gestionarUsuarios: true,
+    crearUsuarios: true,
+    editarUsuarios: true,
+    desactivarUsuarios: true,
+    asignarRoles: true,
+    resetearContrasenas: true,
+    verAuditoria: true, // Solo logs técnicos, no contenido clínico
+    verLogsSeguridad: true,
+    
+    // Otros
+    generarBrazalete: false,
+    generarReportes: false,
+    verEstadisticas: false, // Solo estadísticas técnicas del sistema
+    accesoPorTurno: false
   }
+};
+
+// Tipos de acciones de auditoría
+export const ACCIONES_AUDITORIA = {
+  CREAR_PACIENTE: 'crear_paciente',
+  EDITAR_PACIENTE: 'editar_paciente',
+  VER_FICHA_CLINICA: 'ver_ficha_clinica',
+  CREAR_PARTO: 'crear_parto',
+  EDITAR_PARTO: 'editar_parto',
+  ANEXAR_CORRECCION: 'anexar_correccion',
+  GENERAR_REPORTE: 'generar_reporte',
+  EXPORTAR_DATOS: 'exportar_datos',
+  CREAR_USUARIO: 'crear_usuario',
+  MODIFICAR_USUARIO: 'modificar_usuario',
+  DESACTIVAR_USUARIO: 'desactivar_usuario',
+  LOGIN: 'login',
+  LOGOUT: 'logout',
+  INTENTO_ACCESO_DENEGADO: 'intento_acceso_denegado'
 };
 
 // Configuración de logs
 export const LOG_CONFIG = {
-  habilitado: true, // Cambiado de process.env a valor directo
-  nivel: 'debug' // Cambiado de process.env a valor directo
+  habilitado: true,
+  nivel: 'debug'
 };
 
 // Límites del sistema
@@ -191,4 +312,11 @@ export const LIMITES = {
   tiempoBloqueo: 15 * 60 * 1000, // 15 minutos
   longitudMaximaObservaciones: 500,
   tamañoMaximoArchivo: 5 * 1024 * 1024 // 5 MB
+};
+
+// Turnos disponibles (para asignación de matronas/enfermeras)
+export const TURNOS = {
+  DIURNO: 'diurno',
+  NOCTURNO: 'nocturno',
+  VESPERTINO: 'vespertino'
 };
