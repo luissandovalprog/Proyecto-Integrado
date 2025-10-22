@@ -1,6 +1,6 @@
 // src/componentes/GestionUsuarios.js
 import React, { useState } from 'react';
-import { User, Shield, UserPlus, Edit2, UserX, Key, Save, X } from 'lucide-react';
+import { Shield, UserPlus, Edit2, UserX, Save, X } from 'lucide-react';
 import { ROLES, TURNOS, MENSAJES } from '../utilidades/constantes';
 
 const GestionUsuarios = ({ usuarios = [], onGuardarUsuario, onDesactivarUsuario, mostrarAlerta }) => {

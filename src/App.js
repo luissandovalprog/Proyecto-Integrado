@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, User, Baby, Printer, LogOut, AlertCircle, CheckCircle, Home, Search, Eye, PlusCircle, Shield, BarChart3, Users, Edit3, Clock, Activity, Stethoscope } from 'lucide-react';
-import { generarBrazaletePDF } from './utilidades/generarPDF';
+import { FileText, User, Baby, Printer, LogOut, AlertCircle, CheckCircle, Home, Search, Eye, PlusCircle, Shield, BarChart3, Users, Edit3, Clock, Activity, Stethoscope, List, ChevronDown } from 'lucide-react';
+import { generarBrazaletePDF, generarEpicrisisPDF } from './utilidades/generarPDF';
 import { validarRUT } from './servicios/validaciones';
 import { datosMock } from './mocks/datos';
 import { registrarEventoAuditoria } from './servicios/api';
@@ -12,6 +12,10 @@ import GestionUsuarios from './componentes/GestionUsuarios';
 import AnexarCorreccion from './componentes/AnexarCorreccion';
 import Partograma from './componentes/Partograma';
 import EpicrisisMedica from './componentes/EpicrisisMedica';
+import EditarParto from './componentes/EditarParto';
+import VistaCorrecciones from './componentes/VistaCorrecciones';
+import VistaPartogramas from './componentes/VistaPartogramas';
+import VistaEpicrisis from './componentes/VistaEpicrisis';
 import { PERMISOS, ROLES, MENSAJES, TIMEOUT_SESION, VENTANA_EDICION_PARTO, ACCIONES_AUDITORIA, TURNOS } from './utilidades/constantes';
 
 const App = () => {
@@ -32,6 +36,7 @@ const App = () => {
   const [vistaPreviaMadre, setVistaPreviaMadre] = useState(null);
   const [usuariosSistema, setUsuariosSistema] = useState([]);
   const [correcciones, setCorrecciones] = useState([]);
+  const [menuRegistrosAbierto, setMenuRegistrosAbierto] = useState(false);
 
   // Función para verificar permisos
   const tienePermiso = (permiso) => {
@@ -59,14 +64,13 @@ const App = () => {
 
   // Verificar si el paciente pertenece al turno del usuario
   const perteneceATurno = (paciente) => {
-    if (!usuario || !tienePermiso('accesoPorTurno')) return true; // Sin restricción de turno
+    if (!usuario || !tienePermiso('accesoPorTurno')) return true;
     
-    // Si el usuario tiene turno asignado, verificar
     if (usuario.turno && paciente.turno) {
       return usuario.turno === paciente.turno;
     }
     
-    return true; // Por defecto permitir si no hay turno definido
+    return true;
   };
 
   // Control de timeout de sesión
@@ -78,7 +82,7 @@ const App = () => {
       }
     }, 60000);
     return () => clearInterval(intervalo);
-  }, [usuario, ultimaSesion]);
+    }, [usuario, ultimaSesion]);
 
   // Actualizar actividad del usuario
   const actualizarActividad = () => {
@@ -118,7 +122,6 @@ const App = () => {
   };
 
   const agregarMadre = (datos) => {
-    // Verificar permiso
     if (!tienePermiso('crearPaciente')) {
       mostrarAlerta(MENSAJES.error.sinPermiso, 'error');
       registrarEventoAuditoria({
@@ -145,7 +148,7 @@ const App = () => {
       ...datos,
       fechaIngreso: new Date().toISOString(),
       registradoPor: usuario.nombre,
-      turno: usuario.turno || null // Asignar turno del usuario
+      turno: usuario.turno || null
     };
 
     registrarEventoAuditoria({
@@ -160,7 +163,6 @@ const App = () => {
   };
 
   const registrarParto = (datos) => {
-    // Verificar permiso
     if (!tienePermiso('crearRegistroParto')) {
       mostrarAlerta(MENSAJES.error.sinPermiso, 'error');
       return;
@@ -195,6 +197,43 @@ const App = () => {
     mostrarAlerta(MENSAJES.exito.partoRegistrado, 'success');
     setPantallaActual('dashboard');
     setMadreSeleccionada(null);
+  };
+
+  const editarParto = (datosActualizados) => {
+    if (!tienePermiso('editarRegistroParto')) {
+      mostrarAlerta(MENSAJES.error.sinPermiso, 'error');
+      return;
+    }
+
+    if (!puedeEditarParto(partoSeleccionado)) {
+      mostrarAlerta(MENSAJES.error.ventanaEdicionCerrada, 'error');
+      return;
+    }
+
+    const partoAnterior = partos.find(p => p.id === partoSeleccionado.id);
+    const cambios = [];
+    
+    Object.keys(datosActualizados).forEach(key => {
+      if (partoAnterior[key] !== datosActualizados[key]) {
+        cambios.push(`${key}: "${partoAnterior[key]}" → "${datosActualizados[key]}"`);
+      }
+    });
+
+    setPartos(partos.map(p =>
+      p.id === partoSeleccionado.id ? { ...p, ...datosActualizados } : p
+    ));
+
+    const madre = madres.find(m => m.id === partoSeleccionado.madreId);
+
+    registrarEventoAuditoria({
+      accion: ACCIONES_AUDITORIA.EDITAR_PARTO,
+      detalle: `✏️ EDICIÓN DE PARTO: RN ${partoSeleccionado.rnId} - Madre: ${madre?.nombre} (${madre?.rut}) | Cambios: ${cambios.join(' | ')} | Por: ${usuario.nombre}`,
+      usuario: usuario.nombre
+    });
+
+    mostrarAlerta('Parto actualizado correctamente', 'success');
+    setPantallaActual('dashboard');
+    setPartoSeleccionado(null);
   };
 
   const guardarPartograma = (datosPartograma) => {
@@ -240,6 +279,7 @@ const App = () => {
     setEpicrisis([...epicrisis, nuevaEpicrisis]);
 
     const madre = madres.find(m => m.id === datosEpicrisis.madreId);
+    const parto = partos.find(p => p.id === datosEpicrisis.partoId);
     
     registrarEventoAuditoria({
       accion: 'CREAR_EPICRISIS',
@@ -247,7 +287,14 @@ const App = () => {
       usuario: usuario.nombre
     });
 
-    mostrarAlerta('Epicrisis e indicaciones guardadas exitosamente', 'success');
+    // Generar PDF automáticamente
+    if (parto && madre) {
+      generarEpicrisisPDF(parto, madre, nuevaEpicrisis);
+      mostrarAlerta('Epicrisis guardada y PDF generado exitosamente', 'success');
+    } else {
+      mostrarAlerta('Epicrisis guardada exitosamente', 'success');
+    }
+
     setPantallaActual('dashboard');
     setPartoSeleccionado(null);
   };
@@ -280,7 +327,6 @@ const App = () => {
   };
 
   const mostrarVistaPreviaPDF = (parto) => {
-    // Verificar permiso
     if (!tienePermiso('generarBrazalete')) {
       mostrarAlerta(MENSAJES.error.sinPermiso, 'error');
       return;
@@ -290,7 +336,6 @@ const App = () => {
   };
 
   const imprimirBrazalete = (parto, madre) => {
-    // Verificar permiso
     if (!tienePermiso('generarBrazalete')) {
       mostrarAlerta(MENSAJES.error.sinPermiso, 'error');
       return;
@@ -351,13 +396,11 @@ const App = () => {
 
   // Filtrar datos según permisos y turno
   const madresFiltradas = madres.filter(madre => {
-    // Filtro de búsqueda
     if (busqueda && !madre.rut.toLowerCase().includes(busqueda.toLowerCase()) &&
         !madre.nombre.toLowerCase().includes(busqueda.toLowerCase())) {
       return false;
     }
     
-    // Filtro por turno
     if (!perteneceATurno(madre)) {
       return false;
     }
@@ -367,7 +410,6 @@ const App = () => {
 
   const partosFiltrados = partos.filter(parto => {
     if (!busqueda) {
-      // Solo filtro de turno
       const madre = madres.find(m => m.id === parto.madreId);
       return perteneceATurno(madre);
     }
@@ -495,7 +537,7 @@ const App = () => {
     );
   };
 
-  // Vista previa de información de la madre (solo datos demográficos para administrativos)
+  // Vista previa de información de la madre
   const VistaPreviaMadre = () => {
     if (!vistaPreviaMadre) return null;
 
@@ -579,7 +621,7 @@ const App = () => {
     );
   };
 
-  // Pantalla de Login
+  // Pantalla de Login (igual que antes)
   const PantallaLogin = () => {
     const [credenciales, setCredenciales] = useState({ usuario: '', contrasena: '', turno: TURNOS.DIURNO });
 
@@ -590,7 +632,6 @@ const App = () => {
         return;
       }
       
-      // Roles que requieren selección de turno
       const rolesConTurno = [ROLES.ENFERMERA, ROLES.MATRONA];
       const turnoAsignado = rolesConTurno.includes(rol) ? credenciales.turno : null;
       
@@ -710,7 +751,7 @@ const App = () => {
     );
   };
 
-  // Dashboard principal
+  // Dashboard principal con tabla de RN
   const Dashboard = () => {
     const partosHoy = partosFiltrados.filter(p => {
       const hoy = new Date().toISOString().split('T')[0];
@@ -720,7 +761,6 @@ const App = () => {
     
     return (
       <div className="animacion-entrada">
-        {/* Indicador de turno para roles con restricción */}
         {tienePermiso('accesoPorTurno') && usuario.turno && (
           <div className="tarjeta mb-6" style={{ backgroundColor: '#dbeafe', borderLeft: '4px solid #2563eb' }}>
             <div className="flex items-center gap-3">
@@ -737,7 +777,6 @@ const App = () => {
           </div>
         )}
 
-        {/* Barra de búsqueda */}
         <div className="tarjeta mb-6">
           <div style={{ position: 'relative' }}>
             <Search 
@@ -761,7 +800,6 @@ const App = () => {
           </div>
         </div>
 
-        {/* Tarjetas de estadísticas - Solo si tiene permiso */}
         {tienePermiso('verEstadisticas') && (
           <div className="grid grid-cols-3 gap-4 mb-6">
             <div className="tarjeta tarjeta-hover">
@@ -802,7 +840,6 @@ const App = () => {
           </div>
         )}
 
-        {/* Tabla de RN hospitalizados - Solo si tiene permiso de ver partos */}
         {tienePermiso('verDatosClinicos') && (
           <div className="tarjeta">
             <h2 className="texto-2xl font-bold mb-4">Recién Nacidos Hospitalizados</h2>
@@ -914,6 +951,24 @@ const App = () => {
                                 </>
                               )}
                               
+                              {puedeEditar && (
+                                <button
+                                  onClick={() => {
+                                    setPartoSeleccionado(parto);
+                                    setPantallaActual('editar-parto');
+                                  }}
+                                  className="boton"
+                                  style={{
+                                    padding: '0.5rem',
+                                    backgroundColor: '#8b5cf6',
+                                    color: 'white'
+                                  }}
+                                  title="Editar parto (ventana de 2h)"
+                                >
+                                  <Edit3 size={18} />
+                                </button>
+                              )}
+                              
                               {tienePermiso('anexarCorreccion') && (
                                 <button
                                   onClick={() => {
@@ -943,7 +998,6 @@ const App = () => {
           </div>
         )}
 
-        {/* Vista solo para administrativos - Lista de madres (solo datos demográficos) */}
         {tienePermiso('verDatosDemograficos') && !tienePermiso('verDatosClinicos') && (
           <div className="tarjeta">
             <div className="flex justify-between items-center mb-4">
@@ -1022,7 +1076,6 @@ const App = () => {
           </div>
         )}
 
-        {/* Lista de madres sin parto registrado - Solo para matrona */}
         {tienePermiso('crearRegistroParto') && (
           <div className="tarjeta mt-6">
             <h3 className="texto-xl font-bold mb-4">Madres sin Parto Registrado (Mi Turno)</h3>
@@ -1058,7 +1111,7 @@ const App = () => {
     );
   };
 
-  // Formulario de admisión de madre
+  // Formulario de admisión de madre (igual que antes, sin cambios)
   const FormularioAdmision = () => {
     const [datos, setDatos] = useState({
       rut: '',
@@ -1198,7 +1251,7 @@ const App = () => {
     );
   };
 
-  // Formulario de registro de parto
+  // Formulario de registro de parto (sin cambios, igual que antes)
   const FormularioParto = () => {
     const [datos, setDatos] = useState({
       tipo: 'Vaginal',
@@ -1320,21 +1373,7 @@ const App = () => {
           </div>
           
           <div className="grupo-input">
-            <label className="etiqueta" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              APGAR 1 min *
-              <span 
-                style={{ 
-                  fontSize: '0.75rem', 
-                  color: '#6b7280',
-                  backgroundColor: '#f3f4f6',
-                  padding: '0.125rem 0.5rem',
-                  borderRadius: '4px'
-                }}
-                title="Puntuación al primer minuto de vida"
-              >
-                al 1 min
-              </span>
-            </label>
+            <label className="etiqueta">APGAR 1 min *</label>
             <input
               type="number"
               className={`input ${errores.apgar1 ? 'input-error' : ''}`}
@@ -1348,21 +1387,7 @@ const App = () => {
           </div>
           
           <div className="grupo-input">
-            <label className="etiqueta" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              APGAR 5 min *
-              <span 
-                style={{ 
-                  fontSize: '0.75rem', 
-                  color: '#6b7280',
-                  backgroundColor: '#f3f4f6',
-                  padding: '0.125rem 0.5rem',
-                  borderRadius: '4px'
-                }}
-                title="Puntuación a los cinco minutos de vida"
-              >
-                a los 5 min
-              </span>
-            </label>
+            <label className="etiqueta">APGAR 5 min *</label>
             <input
               type="number"
               className={`input ${errores.apgar5 ? 'input-error' : ''}`}
@@ -1541,6 +1566,95 @@ const App = () => {
                 </button>
               )}
 
+              {/* Menú desplegable de Registros */}
+              {(correcciones.length > 0 || partogramas.length > 0 || epicrisis.length > 0) && (
+                <div style={{ position: 'relative' }}>
+                  <button
+                    onClick={() => setMenuRegistrosAbierto(!menuRegistrosAbierto)}
+                    className="boton"
+                    style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: 'white' }}
+                  >
+                    <List size={20} />
+                    Registros
+                    <ChevronDown size={16} />
+                  </button>
+                  
+                  {menuRegistrosAbierto && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      right: 0,
+                      marginTop: '0.5rem',
+                      backgroundColor: 'white',
+                      borderRadius: '0.5rem',
+                      boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+                      minWidth: '200px',
+                      zIndex: 1000
+                    }}>
+                      {correcciones.length > 0 && (
+                        <button
+                          onClick={() => {
+                            setPantallaActual('vista-correcciones');
+                            setMenuRegistrosAbierto(false);
+                          }}
+                          className="boton"
+                          style={{
+                            width: '100%',
+                            justifyContent: 'flex-start',
+                            backgroundColor: 'transparent',
+                            color: '#1f2937',
+                            borderRadius: 0
+                          }}
+                        >
+                          <FileText size={18} />
+                          Correcciones ({correcciones.length})
+                        </button>
+                      )}
+                      
+                      {partogramas.length > 0 && (
+                        <button
+                          onClick={() => {
+                            setPantallaActual('vista-partogramas');
+                            setMenuRegistrosAbierto(false);
+                          }}
+                          className="boton"
+                          style={{
+                            width: '100%',
+                            justifyContent: 'flex-start',
+                            backgroundColor: 'transparent',
+                            color: '#1f2937',
+                            borderRadius: 0
+                          }}
+                        >
+                          <Activity size={18} />
+                          Partogramas ({partogramas.length})
+                        </button>
+                      )}
+                      
+                      {epicrisis.length > 0 && (
+                        <button
+                          onClick={() => {
+                            setPantallaActual('vista-epicrisis');
+                            setMenuRegistrosAbierto(false);
+                          }}
+                          className="boton"
+                          style={{
+                            width: '100%',
+                            justifyContent: 'flex-start',
+                            backgroundColor: 'transparent',
+                            color: '#1f2937',
+                            borderRadius: 0
+                          }}
+                        >
+                          <Stethoscope size={18} />
+                          Epicrisis ({epicrisis.length})
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {tienePermiso('gestionarUsuarios') && (
                 <button
                   onClick={() => setPantallaActual('gestion-usuarios')}
@@ -1625,7 +1739,6 @@ const App = () => {
             const madreAnterior = madres.find(m => m.id === madreSeleccionada.id);
             const cambios = [];
             
-            // Detectar cambios
             Object.keys(datosActualizados).forEach(key => {
               if (madreAnterior[key] !== datosActualizados[key]) {
                 cambios.push(`${key}: "${madreAnterior[key]}" → "${datosActualizados[key]}"`);
@@ -1648,6 +1761,18 @@ const App = () => {
           }}
           onCancelar={() => {
             setMadreSeleccionada(null);
+            setPantallaActual('dashboard');
+          }}
+        />
+      )}
+
+      {pantallaActual === 'editar-parto' && partoSeleccionado && (
+        <EditarParto
+          parto={partoSeleccionado}
+          madre={madres.find(m => m.id === partoSeleccionado.madreId)}
+          onGuardar={editarParto}
+          onCancelar={() => {
+            setPartoSeleccionado(null);
             setPantallaActual('dashboard');
           }}
         />
@@ -1698,6 +1823,32 @@ const App = () => {
           onGuardarUsuario={guardarUsuario}
           onDesactivarUsuario={desactivarUsuario}
           mostrarAlerta={mostrarAlerta}
+        />
+      )}
+
+      {pantallaActual === 'vista-correcciones' && (
+        <VistaCorrecciones
+          correcciones={correcciones}
+          partos={partos}
+          madres={madres}
+          onCerrar={() => setPantallaActual('dashboard')}
+        />
+      )}
+
+      {pantallaActual === 'vista-partogramas' && (
+        <VistaPartogramas
+          partogramas={partogramas}
+          madres={madres}
+          onCerrar={() => setPantallaActual('dashboard')}
+        />
+      )}
+
+      {pantallaActual === 'vista-epicrisis' && (
+        <VistaEpicrisis
+          epicrisis={epicrisis}
+          partos={partos}
+          madres={madres}
+          onCerrar={() => setPantallaActual('dashboard')}
         />
       )}
 

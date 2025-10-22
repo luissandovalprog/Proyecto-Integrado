@@ -1,5 +1,4 @@
-// src/utilidades/constantes.js
-// Constantes globales del sistema - Cumplimiento RBAC según Ley 20.584
+// Constantes globales del sistema
 
 // Información del sistema
 export const SISTEMA_INFO = {
