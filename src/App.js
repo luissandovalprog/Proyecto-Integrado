@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { FileText, User, Baby, Printer, LogOut, AlertCircle, CheckCircle, Home, Search, Eye, PlusCircle, Shield, BarChart3, Users, Edit3, Clock, Activity, Stethoscope, List, ChevronDown } from 'lucide-react';
 import { generarBrazaletePDF, generarEpicrisisPDF } from './utilidades/generarPDF';
 import { validarRUT } from './servicios/validaciones';
@@ -17,6 +17,342 @@ import VistaCorrecciones from './componentes/VistaCorrecciones';
 import VistaPartogramas from './componentes/VistaPartogramas';
 import VistaEpicrisis from './componentes/VistaEpicrisis';
 import { PERMISOS, ROLES, MENSAJES, TIMEOUT_SESION, VENTANA_EDICION_PARTO, ACCIONES_AUDITORIA, TURNOS } from './utilidades/constantes';
+
+
+const AlertaFlotante = React.memo(({ mensaje, tipo }) => {
+  const iconos = {
+    success: <CheckCircle size={20} />,
+    error: <AlertCircle size={20} />,
+    info: <AlertCircle size={20} />,
+    advertencia: <AlertCircle size={20} />
+  };
+
+  const estilos = {
+    success: 'alerta-exito',
+    error: 'alerta-error',
+    info: 'alerta-info',
+    advertencia: 'alerta-advertencia'
+  };
+
+  return (
+    <div className={`alerta ${estilos[tipo]} animacion-entrada`} style={{
+      position: 'fixed',
+      top: '20px',
+      right: '20px',
+      zIndex: 1000,
+      minWidth: '300px',
+      boxShadow: '0 10px 25px rgba(0,0,0,0.2)'
+    }}>
+      {iconos[tipo]}
+      <span>{mensaje}</span>
+    </div>
+  );
+});
+AlertaFlotante.displayName = 'AlertaFlotante';
+
+const VistaPreviaBrazalete = React.memo(({ vistaPrevia, onImprimir, onCerrar }) => {
+  if (!vistaPrevia) return null;
+
+  const { parto, madre } = vistaPrevia;
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.7)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 2000
+    }}>
+      <div className="tarjeta" style={{ 
+        maxWidth: '600px', 
+        width: '90%',
+        maxHeight: '90vh',
+        overflow: 'auto'
+      }}>
+        <h2 className="texto-2xl font-bold mb-4">Vista Previa del Brazalete</h2>
+
+        <div style={{ 
+          border: '2px solid #2563eb', 
+          padding: '1.5rem', 
+          borderRadius: '8px',
+          backgroundColor: '#f9fafb'
+        }}>
+          <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+            <h3 className="font-bold texto-xl" style={{ color: '#2563eb' }}>
+              HOSPITAL CLÍNICO HERMINDA MARTÍN
+            </h3>
+            <p className="texto-sm">Brazalete de Identificación</p>
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <h4 className="font-semibold mb-2">RECIÉN NACIDO</h4>
+            <p><strong>ID:</strong> {parto.rnId}</p>
+            <p><strong>Fecha:</strong> {new Date(parto.fecha).toLocaleDateString('es-CL')}</p>
+            <p><strong>Hora:</strong> {parto.hora}</p>
+            <p><strong>Peso:</strong> {parto.pesoRN}g</p>
+            <p><strong>Talla:</strong> {parto.tallaRN}cm</p>
+            <p><strong>APGAR:</strong> {parto.apgar1}/{parto.apgar5}</p>
+          </div>
+
+          <div>
+            <h4 className="font-semibold mb-2">MADRE</h4>
+            <p><strong>Nombre:</strong> {madre.nombre}</p>
+            <p><strong>RUT:</strong> {madre.rut}</p>
+            <p><strong>Dirección:</strong> {madre.direccion}</p>
+            <p><strong>Teléfono:</strong> {madre.telefono}</p>
+            <p><strong>Previsión:</strong> {madre.prevision}</p>
+          </div>
+        </div>
+
+        <div className="flex gap-4 mt-6">
+          <button
+            onClick={() => onImprimir(parto, madre)}
+            className="boton boton-primario"
+            style={{ flex: 1 }}
+          >
+            <Printer size={20} />
+            Imprimir Brazalete
+          </button>
+          <button
+            onClick={onCerrar}
+            className="boton boton-gris"
+            style={{ flex: 1 }}
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+VistaPreviaBrazalete.displayName = 'VistaPreviaBrazalete';
+
+const VistaPreviaMadre = React.memo(({ vistaPreviaMadre, mostrarDatosClinicos, onCerrar }) => {
+  if (!vistaPreviaMadre) return null;
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.7)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 2000
+    }}>
+      <div className="tarjeta" style={{ 
+        maxWidth: '600px', 
+        width: '90%',
+        maxHeight: '90vh',
+        overflow: 'auto'
+      }}>
+        <h2 className="texto-2xl font-bold mb-4">Información del Paciente</h2>
+
+        <div style={{ 
+          border: '2px solid #2563eb', 
+          padding: '1.5rem', 
+          borderRadius: '8px',
+          backgroundColor: '#f9fafb'
+        }}>
+          <div style={{ marginBottom: '1rem' }}>
+            <h4 className="font-semibold mb-3" style={{ color: '#2563eb' }}>DATOS DEMOGRÁFICOS</h4>
+            <p className="mb-2"><strong>Nombre:</strong> {vistaPreviaMadre.nombre}</p>
+            <p className="mb-2"><strong>RUT:</strong> {vistaPreviaMadre.rut}</p>
+            <p className="mb-2"><strong>Edad:</strong> {vistaPreviaMadre.edad} años</p>
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <h4 className="font-semibold mb-3" style={{ color: '#2563eb' }}>CONTACTO</h4>
+            <p className="mb-2"><strong>Dirección:</strong> {vistaPreviaMadre.direccion}</p>
+            <p className="mb-2"><strong>Teléfono:</strong> {vistaPreviaMadre.telefono}</p>
+            <p className="mb-2"><strong>Previsión:</strong> {vistaPreviaMadre.prevision}</p>
+          </div>
+
+          {mostrarDatosClinicos && (
+            <div style={{ marginBottom: '1rem' }}>
+              <h4 className="font-semibold mb-3" style={{ color: '#2563eb' }}>ANTECEDENTES CLÍNICOS</h4>
+              <p className="mb-2">{vistaPreviaMadre.antecedentes || 'Sin antecedentes registrados'}</p>
+            </div>
+          )}
+
+          <div>
+            <h4 className="font-semibold mb-3" style={{ color: '#2563eb' }}>REGISTRO</h4>
+            <p className="mb-2"><strong>Fecha de Ingreso:</strong> {new Date(vistaPreviaMadre.fechaIngreso).toLocaleDateString('es-CL')}</p>
+            <p className="mb-2"><strong>Registrado por:</strong> {vistaPreviaMadre.registradoPor}</p>
+          </div>
+        </div>
+
+        {!mostrarDatosClinicos && (
+          <div className="mt-4 p-3" style={{ backgroundColor: '#fef3c7', borderRadius: '0.5rem' }}>
+            <p className="texto-sm" style={{ color: '#92400e' }}>
+              <AlertCircle size={16} style={{ display: 'inline', marginRight: '0.25rem' }} />
+              Su rol solo permite ver datos demográficos según Ley 20.584
+            </p>
+          </div>
+        )}
+
+        <div className="flex gap-4 mt-6">
+          <button
+            onClick={onCerrar}
+            className="boton boton-primario"
+            style={{ flex: 1 }}
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+VistaPreviaMadre.displayName = 'VistaPreviaMadre';
+
+const PantallaLogin = React.memo(({ onLogin, mostrarAlerta }) => {
+  const [credenciales, setCredenciales] = useState({ 
+    usuario: '', 
+    contrasena: '', 
+    turno: TURNOS.DIURNO 
+  });
+
+  const handleLogin = useCallback((e, rol) => {
+    e.preventDefault();
+    if (!credenciales.usuario) {
+      mostrarAlerta('Ingrese su nombre de usuario', 'error');
+      return;
+    }
+
+    const rolesConTurno = [ROLES.ENFERMERA, ROLES.MATRONA];
+    const turnoAsignado = rolesConTurno.includes(rol) ? credenciales.turno : null;
+
+    onLogin(rol, credenciales.usuario, turnoAsignado);
+  }, [credenciales, onLogin, mostrarAlerta]);
+
+  const handleInputChange = useCallback((field, value) => {
+    setCredenciales(prev => ({ ...prev, [field]: value }));
+  }, []);
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '1rem'
+    }}>
+      <div className="tarjeta" style={{ maxWidth: '450px', width: '100%' }}>
+        <div className="texto-centro mb-6">
+          <div style={{
+            backgroundColor: '#2563eb',
+            color: 'white',
+            borderRadius: '50%',
+            width: '80px',
+            height: '80px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 1rem'
+          }}>
+            <Baby size={40} />
+          </div>
+          <h1 className="texto-3xl font-bold mb-4">SIGN - Sistema de Partos</h1>
+          <p className="texto-gris">Hospital Clínico Herminda Martín</p>
+          <p className="texto-sm texto-gris">Chillán, Chile</p>
+        </div>
+
+        <div className="grupo-input">
+          <label className="etiqueta">Nombre de Usuario</label>
+          <input
+            type="text"
+            className="input"
+            placeholder="Ingrese su nombre"
+            value={credenciales.usuario}
+            onChange={(e) => handleInputChange('usuario', e.target.value)}
+          />
+        </div>
+
+        <div className="grupo-input">
+          <label className="etiqueta">Contraseña (Simulada)</label>
+          <input
+            type="password"
+            className="input"
+            placeholder="••••••••"
+            value={credenciales.contrasena}
+            onChange={(e) => handleInputChange('contrasena', e.target.value)}
+          />
+        </div>
+
+        <div className="grupo-input">
+          <label className="etiqueta">Turno (Enfermera/Matrona)</label>
+          <select
+            className="select"
+            value={credenciales.turno}
+            onChange={(e) => handleInputChange('turno', e.target.value)}
+          >
+            <option value={TURNOS.DIURNO}>Diurno (08:00 - 20:00)</option>
+            <option value={TURNOS.NOCTURNO}>Nocturno (20:00 - 08:00)</option>
+            <option value={TURNOS.VESPERTINO}>Vespertino (14:00 - 22:00)</option>
+          </select>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <button
+            onClick={(e) => handleLogin(e, ROLES.ADMINISTRATIVO)}
+            className="boton boton-primario boton-completo"
+          >
+            <User size={20} />
+            Acceder como Administrativo
+          </button>
+          <button
+            onClick={(e) => handleLogin(e, ROLES.MATRONA)}
+            className="boton boton-secundario boton-completo"
+          >
+            <FileText size={20} />
+            Acceder como Matrona
+          </button>
+          <button
+            onClick={(e) => handleLogin(e, ROLES.MEDICO)}
+            className="boton boton-completo"
+            style={{ backgroundColor: '#7c3aed', color: 'white' }}
+          >
+            <FileText size={20} />
+            Acceder como Médico
+          </button>
+          <button
+            onClick={(e) => handleLogin(e, ROLES.ENFERMERA)}
+            className="boton boton-completo"
+            style={{ backgroundColor: '#00bddfff', color: 'white' }}
+          >
+            <User size={20} />
+            Acceder como Enfermera
+          </button>
+          <button
+            onClick={(e) => handleLogin(e, ROLES.ADMIN_SISTEMA)}
+            className="boton boton-completo"
+            style={{ backgroundColor: '#5d00ffff', color: 'white' }}
+          >
+            <Shield size={20} />
+            Acceder como Admin Sistema
+          </button>
+        </div>
+
+        <p className="texto-xs texto-gris texto-centro mt-4">
+          Demo v1.0 - Sistema RBAC según Ley 20.584
+        </p>
+      </div>
+    </div>
+  );
+});
+PantallaLogin.displayName = 'PantallaLogin';
+
+// ======= COMPONENTE PRINCIPAL APP =======
 
 const App = () => {
   // Estados globales
@@ -38,40 +374,68 @@ const App = () => {
   const [correcciones, setCorrecciones] = useState([]);
   const [menuRegistrosAbierto, setMenuRegistrosAbierto] = useState(false);
 
-  // Función para verificar permisos
-  const tienePermiso = (permiso) => {
+  // Funciones memoizadas para verificar permisos
+  const tienePermiso = useCallback((permiso) => {
     if (!usuario) return false;
     return PERMISOS[usuario.rol]?.[permiso] || false;
-  };
+  }, [usuario]);
 
-  // Verificar si un parto puede ser editado (ventana de 2 horas para matrona)
-  const puedeEditarParto = (parto) => {
+  const puedeEditarParto = useCallback((parto) => {
     if (!usuario) return false;
-    
-    // Médicos usan anexarCorreccion, no edición directa
+
     if (usuario.rol === ROLES.MEDICO) return false;
-    
-    // Matronas solo pueden editar dentro de 2 horas
+
     if (usuario.rol === ROLES.MATRONA) {
       const tiempoTranscurrido = Date.now() - new Date(parto.fechaRegistro).getTime();
       const dentroDeVentana = tiempoTranscurrido <= VENTANA_EDICION_PARTO;
       const esDelMismoUsuario = parto.registradoPor === usuario.nombre;
       return dentroDeVentana && esDelMismoUsuario && tienePermiso('editarRegistroParto');
     }
-    
-    return false;
-  };
 
-  // Verificar si el paciente pertenece al turno del usuario
-  const perteneceATurno = (paciente) => {
+    return false;
+  }, [usuario, tienePermiso]);
+
+  const perteneceATurno = useCallback((paciente) => {
     if (!usuario || !tienePermiso('accesoPorTurno')) return true;
-    
+
     if (usuario.turno && paciente.turno) {
       return usuario.turno === paciente.turno;
     }
-    
+
     return true;
-  };
+  }, [usuario, tienePermiso]);
+
+  // Datos filtrados memoizados
+  const madresFiltradas = useMemo(() => {
+    return madres.filter(madre => {
+      if (busqueda && !madre.rut.toLowerCase().includes(busqueda.toLowerCase()) &&
+          !madre.nombre.toLowerCase().includes(busqueda.toLowerCase())) {
+        return false;
+      }
+
+      if (!perteneceATurno(madre)) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [madres, busqueda, perteneceATurno]);
+
+  const partosFiltrados = useMemo(() => {
+    return partos.filter(parto => {
+      if (!busqueda) {
+        const madre = madres.find(m => m.id === parto.madreId);
+        return perteneceATurno(madre);
+      }
+
+      const madre = madres.find(m => m.id === parto.madreId);
+      const coincideBusqueda = madre?.rut.toLowerCase().includes(busqueda.toLowerCase()) ||
+             madre?.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+             parto.rnId.toLowerCase().includes(busqueda.toLowerCase());
+
+      return coincideBusqueda && perteneceATurno(madre);
+    });
+  }, [partos, madres, busqueda, perteneceATurno]);
 
   // Control de timeout de sesión
   useEffect(() => {
@@ -82,46 +446,53 @@ const App = () => {
       }
     }, 60000);
     return () => clearInterval(intervalo);
-    }, [usuario, ultimaSesion]);
+  }, [usuario, ultimaSesion]);
 
-  // Actualizar actividad del usuario
-  const actualizarActividad = () => {
+  // Funciones de utilidad memoizadas
+  const actualizarActividad = useCallback(() => {
     setUltimaSesion(Date.now());
-  };
+  }, []);
 
-  // Funciones auxiliares
-  const mostrarAlerta = (mensaje, tipo = 'info') => {
+  const mostrarAlerta = useCallback((mensaje, tipo = 'info') => {
     setAlerta({ mensaje, tipo });
     setTimeout(() => setAlerta(null), 4000);
-  };
+  }, []);
 
-  const iniciarSesion = (rol, nombreUsuario, turno = null) => {
+  const calcularDiasHospitalizacion = useCallback((fechaIngreso) => {
+    const fecha = new Date(fechaIngreso);
+    const hoy = new Date();
+    const diferencia = Math.floor((hoy - fecha) / (1000 * 60 * 60 * 24));
+    return diferencia;
+  }, []);
+
+  // Funciones principales optimizadas
+  const iniciarSesion = useCallback((rol, nombreUsuario, turno = null) => {
     setUsuario({ rol, nombre: nombreUsuario, turno });
     setPantallaActual('dashboard');
     actualizarActividad();
     mostrarAlerta(`Bienvenido/a ${nombreUsuario}`, 'success');
-    
+
     registrarEventoAuditoria({
       accion: ACCIONES_AUDITORIA.LOGIN,
       detalle: `Inicio de sesión: ${nombreUsuario} (${rol})`,
       usuario: nombreUsuario
     });
-  };
+  }, [actualizarActividad, mostrarAlerta]);
 
-  const cerrarSesion = () => {
+  const cerrarSesion = useCallback(() => {
     registrarEventoAuditoria({
       accion: ACCIONES_AUDITORIA.LOGOUT,
       detalle: `Cierre de sesión: ${usuario?.nombre}`,
       usuario: usuario?.nombre || 'desconocido'
     });
-    
+
     setUsuario(null);
     setPantallaActual('login');
     setMadreSeleccionada(null);
     mostrarAlerta(MENSAJES.exito.sesionCerrada, 'info');
-  };
+  }, [usuario, mostrarAlerta]);
 
-  const agregarMadre = (datos) => {
+  const agregarMadre = useCallback((datos) => {
     if (!tienePermiso('crearPaciente')) {
       mostrarAlerta(MENSAJES.error.sinPermiso, 'error');
       registrarEventoAuditoria({
@@ -136,13 +507,13 @@ const App = () => {
       mostrarAlerta(MENSAJES.error.rutInvalido, 'error');
       return;
     }
-    
+
     const rutExiste = madres.some(m => m.rut === datos.rut);
     if (rutExiste) {
       mostrarAlerta('Ya existe una madre registrada con este RUT', 'error');
       return;
     }
-    
+
     const nuevaMadre = {
       id: madres.length + 1,
       ...datos,
@@ -156,13 +527,13 @@ const App = () => {
       detalle: `Admisión de madre: ${datos.rut} (${datos.nombre}) por usuario ${usuario?.nombre || 'desconocido'}`,
       usuario: usuario?.nombre || 'desconocido',
     });
-    
-    setMadres([...madres, nuevaMadre]);
+
+    setMadres(prev => [...prev, nuevaMadre]);
     mostrarAlerta(MENSAJES.exito.madreRegistrada, 'success');
     setPantallaActual('dashboard');
-  };
+  }, [tienePermiso, mostrarAlerta, usuario, madres]);
 
-  const registrarParto = (datos) => {
+  const registrarParto = useCallback((datos) => {
     if (!tienePermiso('crearRegistroParto')) {
       mostrarAlerta(MENSAJES.error.sinPermiso, 'error');
       return;
@@ -192,14 +563,14 @@ const App = () => {
       detalle: `✅ REGISTRO DE PARTO: RN ${nuevoParto.rnId} - Madre: ${madre?.nombre} (${madre?.rut}) | Tipo: ${datos.tipo} | Peso: ${datos.pesoRN}g | Talla: ${datos.tallaRN}cm | APGAR: ${datos.apgar1}/${datos.apgar5} | Corticoides: ${datos.corticoides} | Registrado por: ${usuario?.nombre}`,
       usuario: usuario?.nombre || 'desconocido',
     });
-    
-    setPartos([...partos, nuevoParto]);
+
+    setPartos(prev => [...prev, nuevoParto]);
     mostrarAlerta(MENSAJES.exito.partoRegistrado, 'success');
     setPantallaActual('dashboard');
     setMadreSeleccionada(null);
-  };
+  }, [tienePermiso, mostrarAlerta, usuario, partos, madreSeleccionada, madres]);
 
-  const editarParto = (datosActualizados) => {
+  const editarParto = useCallback((datosActualizados) => {
     if (!tienePermiso('editarRegistroParto')) {
       mostrarAlerta(MENSAJES.error.sinPermiso, 'error');
       return;
@@ -212,14 +583,14 @@ const App = () => {
 
     const partoAnterior = partos.find(p => p.id === partoSeleccionado.id);
     const cambios = [];
-    
+
     Object.keys(datosActualizados).forEach(key => {
       if (partoAnterior[key] !== datosActualizados[key]) {
         cambios.push(`${key}: "${partoAnterior[key]}" → "${datosActualizados[key]}"`);
       }
     });
 
-    setPartos(partos.map(p =>
+    setPartos(prev => prev.map(p =>
       p.id === partoSeleccionado.id ? { ...p, ...datosActualizados } : p
     ));
 
@@ -234,9 +605,9 @@ const App = () => {
     mostrarAlerta('Parto actualizado correctamente', 'success');
     setPantallaActual('dashboard');
     setPartoSeleccionado(null);
-  };
+  }, [tienePermiso, puedeEditarParto, mostrarAlerta, partoSeleccionado, partos, madres, usuario]);
 
-  const guardarPartograma = (datosPartograma) => {
+  const guardarPartograma = useCallback((datosPartograma) => {
     if (!tienePermiso('crearPartograma')) {
       mostrarAlerta(MENSAJES.error.sinPermiso, 'error');
       return;
@@ -249,10 +620,10 @@ const App = () => {
       turno: usuario.turno
     };
 
-    setPartogramas([...partogramas, nuevoPartograma]);
+    setPartogramas(prev => [...prev, nuevoPartograma]);
 
     const madre = madres.find(m => m.id === datosPartograma.madreId);
-    
+
     registrarEventoAuditoria({
       accion: 'CREAR_PARTOGRAMA',
       detalle: `📊 PARTOGRAMA CREADO: Madre: ${madre?.nombre} (${madre?.rut}) | ${datosPartograma.registros.length} registros | Última dilatación: ${datosPartograma.registros[datosPartograma.registros.length - 1]?.dilatacion}cm | Por: ${usuario.nombre}`,
@@ -262,9 +633,9 @@ const App = () => {
     mostrarAlerta('Partograma guardado exitosamente', 'success');
     setPantallaActual('dashboard');
     setMadreSeleccionada(null);
-  };
+  }, [tienePermiso, mostrarAlerta, usuario, partogramas, madres]);
 
-  const guardarEpicrisis = (datosEpicrisis) => {
+  const guardarEpicrisis = useCallback((datosEpicrisis) => {
     if (!tienePermiso('crearEpicrisis')) {
       mostrarAlerta(MENSAJES.error.sinPermiso, 'error');
       return;
@@ -276,11 +647,11 @@ const App = () => {
       medico: usuario.nombre
     };
 
-    setEpicrisis([...epicrisis, nuevaEpicrisis]);
+    setEpicrisis(prev => [...prev, nuevaEpicrisis]);
 
     const madre = madres.find(m => m.id === datosEpicrisis.madreId);
     const parto = partos.find(p => p.id === datosEpicrisis.partoId);
-    
+
     registrarEventoAuditoria({
       accion: 'CREAR_EPICRISIS',
       detalle: `🏥 EPICRISIS CREADA: Madre: ${madre?.nombre} (${madre?.rut}) | Diagnóstico: ${datosEpicrisis.epicrisis.diagnosticoEgreso.substring(0, 100)}... | Condición: ${datosEpicrisis.epicrisis.condicionEgreso} | ${datosEpicrisis.indicaciones.length} indicaciones médicas | Por: ${usuario.nombre}`,
@@ -297,9 +668,9 @@ const App = () => {
 
     setPantallaActual('dashboard');
     setPartoSeleccionado(null);
-  };
+  }, [tienePermiso, mostrarAlerta, usuario, epicrisis, madres, partos]);
 
-  const anexarCorreccionParto = (datosCorreccion) => {
+  const anexarCorreccionParto = useCallback((datosCorreccion) => {
     if (!tienePermiso('anexarCorreccion')) {
       mostrarAlerta(MENSAJES.error.sinPermiso, 'error');
       return;
@@ -313,7 +684,7 @@ const App = () => {
       fechaCorreccion: new Date().toISOString()
     };
 
-    setCorrecciones([...correcciones, nuevaCorreccion]);
+    setCorrecciones(prev => [...prev, nuevaCorreccion]);
 
     registrarEventoAuditoria({
       accion: ACCIONES_AUDITORIA.ANEXAR_CORRECCION,
@@ -324,18 +695,18 @@ const App = () => {
     mostrarAlerta(MENSAJES.exito.correccionAnexada, 'success');
     setPantallaActual('dashboard');
     setPartoSeleccionado(null);
-  };
+  }, [tienePermiso, mostrarAlerta, usuario, correcciones]);
 
-  const mostrarVistaPreviaPDF = (parto) => {
+  const mostrarVistaPreviaPDF = useCallback((parto) => {
     if (!tienePermiso('generarBrazalete')) {
       mostrarAlerta(MENSAJES.error.sinPermiso, 'error');
       return;
     }
     const madre = madres.find(m => m.id === parto.madreId);
     setVistaPrevia({ parto, madre });
-  };
+  }, [tienePermiso, mostrarAlerta, madres]);
 
-  const imprimirBrazalete = (parto, madre) => {
+  const imprimirBrazalete = useCallback((parto, madre) => {
     if (!tienePermiso('generarBrazalete')) {
       mostrarAlerta(MENSAJES.error.sinPermiso, 'error');
       return;
@@ -343,422 +714,57 @@ const App = () => {
     generarBrazaletePDF(parto, madre);
     setVistaPrevia(null);
     mostrarAlerta('Brazalete generado correctamente', 'success');
-  };
+  }, [tienePermiso, mostrarAlerta]);
 
-  const guardarUsuario = (datosUsuario) => {
+  const guardarUsuario = useCallback((datosUsuario) => {
     const usuarioExiste = usuariosSistema.find(u => u.id === datosUsuario.id);
-    
+
     if (usuarioExiste) {
-      setUsuariosSistema(usuariosSistema.map(u => 
+      setUsuariosSistema(prev => prev.map(u => 
         u.id === datosUsuario.id ? datosUsuario : u
       ));
       mostrarAlerta('Usuario actualizado correctamente', 'success');
-      
+
       registrarEventoAuditoria({
         accion: ACCIONES_AUDITORIA.MODIFICAR_USUARIO,
         detalle: `Usuario modificado: ${datosUsuario.username} por ${usuario.nombre}`,
         usuario: usuario.nombre
       });
     } else {
-      setUsuariosSistema([...usuariosSistema, datosUsuario]);
+      setUsuariosSistema(prev => [...prev, datosUsuario]);
       mostrarAlerta('Usuario creado correctamente', 'success');
-      
+
       registrarEventoAuditoria({
         accion: ACCIONES_AUDITORIA.CREAR_USUARIO,
         detalle: `Usuario creado: ${datosUsuario.username} (${datosUsuario.rol}) por ${usuario.nombre}`,
         usuario: usuario.nombre
       });
     }
-  };
+  }, [usuariosSistema, mostrarAlerta, usuario]);
 
-  const desactivarUsuario = (usuarioId) => {
-    setUsuariosSistema(usuariosSistema.map(u =>
+  const desactivarUsuario = useCallback((usuarioId) => {
+    setUsuariosSistema(prev => prev.map(u =>
       u.id === usuarioId ? { ...u, activo: false } : u
     ));
-    
+
     const usuarioDesactivado = usuariosSistema.find(u => u.id === usuarioId);
     mostrarAlerta(`Usuario ${usuarioDesactivado?.nombre} desactivado`, 'success');
-    
+
     registrarEventoAuditoria({
       accion: ACCIONES_AUDITORIA.DESACTIVAR_USUARIO,
       detalle: `Usuario desactivado: ${usuarioDesactivado?.username} por ${usuario.nombre}`,
       usuario: usuario.nombre
     });
-  };
-
-  // Calcular días de hospitalización
-  const calcularDiasHospitalizacion = (fechaIngreso) => {
-    const fecha = new Date(fechaIngreso);
-    const hoy = new Date();
-    const diferencia = Math.floor((hoy - fecha) / (1000 * 60 * 60 * 24));
-    return diferencia;
-  };
-
-  // Filtrar datos según permisos y turno
-  const madresFiltradas = madres.filter(madre => {
-    if (busqueda && !madre.rut.toLowerCase().includes(busqueda.toLowerCase()) &&
-        !madre.nombre.toLowerCase().includes(busqueda.toLowerCase())) {
-      return false;
-    }
-    
-    if (!perteneceATurno(madre)) {
-      return false;
-    }
-    
-    return true;
-  });
-
-  const partosFiltrados = partos.filter(parto => {
-    if (!busqueda) {
-      const madre = madres.find(m => m.id === parto.madreId);
-      return perteneceATurno(madre);
-    }
-    
-    const madre = madres.find(m => m.id === parto.madreId);
-    const coincideBusqueda = madre?.rut.toLowerCase().includes(busqueda.toLowerCase()) ||
-           madre?.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-           parto.rnId.toLowerCase().includes(busqueda.toLowerCase());
-    
-    return coincideBusqueda && perteneceATurno(madre);
-  });
-
-  // ============== COMPONENTES ==============
-
-  // Alerta flotante
-  const AlertaFlotante = ({ mensaje, tipo }) => {
-    const iconos = {
-      success: <CheckCircle size={20} />,
-      error: <AlertCircle size={20} />,
-      info: <AlertCircle size={20} />,
-      advertencia: <AlertCircle size={20} />
-    };
-
-    const estilos = {
-      success: 'alerta-exito',
-      error: 'alerta-error',
-      info: 'alerta-info',
-      advertencia: 'alerta-advertencia'
-    };
-
-    return (
-      <div className={`alerta ${estilos[tipo]} animacion-entrada`} style={{
-        position: 'fixed',
-        top: '20px',
-        right: '20px',
-        zIndex: 1000,
-        minWidth: '300px',
-        boxShadow: '0 10px 25px rgba(0,0,0,0.2)'
-      }}>
-        {iconos[tipo]}
-        <span>{mensaje}</span>
-      </div>
-    );
-  };
-
-  // Vista previa del brazalete
-  const VistaPreviaBrazalete = () => {
-    if (!vistaPrevia) return null;
-
-    const { parto, madre } = vistaPrevia;
-
-    return (
-      <div style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0,0,0,0.7)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 2000
-      }}>
-        <div className="tarjeta" style={{ 
-          maxWidth: '600px', 
-          width: '90%',
-          maxHeight: '90vh',
-          overflow: 'auto'
-        }}>
-          <h2 className="texto-2xl font-bold mb-4">Vista Previa del Brazalete</h2>
-          
-          <div style={{ 
-            border: '2px solid #2563eb', 
-            padding: '1.5rem', 
-            borderRadius: '8px',
-            backgroundColor: '#f9fafb'
-          }}>
-            <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
-              <h3 className="font-bold texto-xl" style={{ color: '#2563eb' }}>
-                HOSPITAL CLÍNICO HERMINDA MARTÍN
-              </h3>
-              <p className="texto-sm">Brazalete de Identificación</p>
-            </div>
-
-            <div style={{ marginBottom: '1rem' }}>
-              <h4 className="font-semibold mb-2">RECIÉN NACIDO</h4>
-              <p><strong>ID:</strong> {parto.rnId}</p>
-              <p><strong>Fecha:</strong> {new Date(parto.fecha).toLocaleDateString('es-CL')}</p>
-              <p><strong>Hora:</strong> {parto.hora}</p>
-              <p><strong>Peso:</strong> {parto.pesoRN}g</p>
-              <p><strong>Talla:</strong> {parto.tallaRN}cm</p>
-              <p><strong>APGAR:</strong> {parto.apgar1}/{parto.apgar5}</p>
-            </div>
-
-            <div>
-              <h4 className="font-semibold mb-2">MADRE</h4>
-              <p><strong>Nombre:</strong> {madre.nombre}</p>
-              <p><strong>RUT:</strong> {madre.rut}</p>
-              <p><strong>Dirección:</strong> {madre.direccion}</p>
-              <p><strong>Teléfono:</strong> {madre.telefono}</p>
-              <p><strong>Previsión:</strong> {madre.prevision}</p>
-            </div>
-          </div>
-
-          <div className="flex gap-4 mt-6">
-            <button
-              onClick={() => imprimirBrazalete(parto, madre)}
-              className="boton boton-primario"
-              style={{ flex: 1 }}
-            >
-              <Printer size={20} />
-              Imprimir Brazalete
-            </button>
-            <button
-              onClick={() => setVistaPrevia(null)}
-              className="boton boton-gris"
-              style={{ flex: 1 }}
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Vista previa de información de la madre
-  const VistaPreviaMadre = () => {
-    if (!vistaPreviaMadre) return null;
-
-    const mostrarDatosClinicos = tienePermiso('verDatosClinicos');
-
-    return (
-      <div style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0,0,0,0.7)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 2000
-      }}>
-        <div className="tarjeta" style={{ 
-          maxWidth: '600px', 
-          width: '90%',
-          maxHeight: '90vh',
-          overflow: 'auto'
-        }}>
-          <h2 className="texto-2xl font-bold mb-4">Información del Paciente</h2>
-          
-          <div style={{ 
-            border: '2px solid #2563eb', 
-            padding: '1.5rem', 
-            borderRadius: '8px',
-            backgroundColor: '#f9fafb'
-          }}>
-            <div style={{ marginBottom: '1rem' }}>
-              <h4 className="font-semibold mb-3" style={{ color: '#2563eb' }}>DATOS DEMOGRÁFICOS</h4>
-              <p className="mb-2"><strong>Nombre:</strong> {vistaPreviaMadre.nombre}</p>
-              <p className="mb-2"><strong>RUT:</strong> {vistaPreviaMadre.rut}</p>
-              <p className="mb-2"><strong>Edad:</strong> {vistaPreviaMadre.edad} años</p>
-            </div>
-
-            <div style={{ marginBottom: '1rem' }}>
-              <h4 className="font-semibold mb-3" style={{ color: '#2563eb' }}>CONTACTO</h4>
-              <p className="mb-2"><strong>Dirección:</strong> {vistaPreviaMadre.direccion}</p>
-              <p className="mb-2"><strong>Teléfono:</strong> {vistaPreviaMadre.telefono}</p>
-              <p className="mb-2"><strong>Previsión:</strong> {vistaPreviaMadre.prevision}</p>
-            </div>
-
-            {mostrarDatosClinicos && (
-              <div style={{ marginBottom: '1rem' }}>
-                <h4 className="font-semibold mb-3" style={{ color: '#2563eb' }}>ANTECEDENTES CLÍNICOS</h4>
-                <p className="mb-2">{vistaPreviaMadre.antecedentes || 'Sin antecedentes registrados'}</p>
-              </div>
-            )}
-
-            <div>
-              <h4 className="font-semibold mb-3" style={{ color: '#2563eb' }}>REGISTRO</h4>
-              <p className="mb-2"><strong>Fecha de Ingreso:</strong> {new Date(vistaPreviaMadre.fechaIngreso).toLocaleDateString('es-CL')}</p>
-              <p className="mb-2"><strong>Registrado por:</strong> {vistaPreviaMadre.registradoPor}</p>
-            </div>
-          </div>
-
-          {!mostrarDatosClinicos && (
-            <div className="mt-4 p-3" style={{ backgroundColor: '#fef3c7', borderRadius: '0.5rem' }}>
-              <p className="texto-sm" style={{ color: '#92400e' }}>
-                <AlertCircle size={16} style={{ display: 'inline', marginRight: '0.25rem' }} />
-                Su rol solo permite ver datos demográficos según Ley 20.584
-              </p>
-            </div>
-          )}
-
-          <div className="flex gap-4 mt-6">
-            <button
-              onClick={() => setVistaPreviaMadre(null)}
-              className="boton boton-primario"
-              style={{ flex: 1 }}
-            >
-              Cerrar
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Pantalla de Login (igual que antes)
-  const PantallaLogin = () => {
-    const [credenciales, setCredenciales] = useState({ usuario: '', contrasena: '', turno: TURNOS.DIURNO });
-
-    const handleLogin = (e, rol) => {
-      e.preventDefault();
-      if (!credenciales.usuario) {
-        mostrarAlerta('Ingrese su nombre de usuario', 'error');
-        return;
-      }
-      
-      const rolesConTurno = [ROLES.ENFERMERA, ROLES.MATRONA];
-      const turnoAsignado = rolesConTurno.includes(rol) ? credenciales.turno : null;
-      
-      iniciarSesion(rol, credenciales.usuario, turnoAsignado);
-    };
-
-    return (
-      <div style={{
-        minHeight: '100vh',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '1rem'
-      }}>
-        <div className="tarjeta" style={{ maxWidth: '450px', width: '100%' }}>
-          <div className="texto-centro mb-6">
-            <div style={{
-              backgroundColor: '#2563eb',
-              color: 'white',
-              borderRadius: '50%',
-              width: '80px',
-              height: '80px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 1rem'
-            }}>
-              <Baby size={40} />
-            </div>
-            <h1 className="texto-3xl font-bold mb-4">SIGN - Sistema de Partos</h1>
-            <p className="texto-gris">Hospital Clínico Herminda Martín</p>
-            <p className="texto-sm texto-gris">Chillán, Chile</p>
-          </div>
-
-          <div className="grupo-input">
-            <label className="etiqueta">Nombre de Usuario</label>
-            <input
-              type="text"
-              className="input"
-              placeholder="Ingrese su nombre"
-              value={credenciales.usuario}
-              onChange={(e) => setCredenciales({ ...credenciales, usuario: e.target.value })}
-            />
-          </div>
-
-          <div className="grupo-input">
-            <label className="etiqueta">Contraseña (Simulada)</label>
-            <input
-              type="password"
-              className="input"
-              placeholder="••••••••"
-              value={credenciales.contrasena}
-              onChange={(e) => setCredenciales({ ...credenciales, contrasena: e.target.value })}
-            />
-          </div>
-
-          <div className="grupo-input">
-            <label className="etiqueta">Turno (Enfermera/Matrona)</label>
-            <select
-              className="select"
-              value={credenciales.turno}
-              onChange={(e) => setCredenciales({ ...credenciales, turno: e.target.value })}
-            >
-              <option value={TURNOS.DIURNO}>Diurno (08:00 - 20:00)</option>
-              <option value={TURNOS.NOCTURNO}>Nocturno (20:00 - 08:00)</option>
-              <option value={TURNOS.VESPERTINO}>Vespertino (14:00 - 22:00)</option>
-            </select>
-          </div>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            <button
-              onClick={(e) => handleLogin(e, ROLES.ADMINISTRATIVO)}
-              className="boton boton-primario boton-completo"
-            >
-              <User size={20} />
-              Acceder como Administrativo
-            </button>
-            <button
-              onClick={(e) => handleLogin(e, ROLES.MATRONA)}
-              className="boton boton-secundario boton-completo"
-            >
-              <FileText size={20} />
-              Acceder como Matrona
-            </button>
-            <button
-              onClick={(e) => handleLogin(e, ROLES.MEDICO)}
-              className="boton boton-completo"
-              style={{ backgroundColor: '#7c3aed', color: 'white' }}
-            >
-              <FileText size={20} />
-              Acceder como Médico
-            </button>
-            <button
-              onClick={(e) => handleLogin(e, ROLES.ENFERMERA)}
-              className="boton boton-completo"
-              style={{ backgroundColor: '#00bddfff', color: 'white' }}
-            >
-              <User size={20} />
-              Acceder como Enfermera
-            </button>
-            <button
-              onClick={(e) => handleLogin(e, ROLES.ADMIN_SISTEMA)}
-              className="boton boton-completo"
-              style={{ backgroundColor: '#5d00ffff', color: 'white' }}
-            >
-              <Shield size={20} />
-              Acceder como Admin Sistema
-            </button>
-          </div>
-          
-          <p className="texto-xs texto-gris texto-centro mt-4">
-            Demo v1.0 - Sistema RBAC según Ley 20.584
-          </p>
-        </div>
-      </div>
-    );
-  };
+  }, [usuariosSistema, mostrarAlerta, usuario]);
 
   // Dashboard principal con tabla de RN
-  const Dashboard = () => {
+  const Dashboard = useMemo(() => {
     const partosHoy = partosFiltrados.filter(p => {
       const hoy = new Date().toISOString().split('T')[0];
       return p.fecha === hoy;
     });
     const partosRecientes = partosFiltrados.slice(-10).reverse();
-    
+
     return (
       <div className="animacion-entrada">
         {tienePermiso('accesoPorTurno') && usuario.turno && (
@@ -814,7 +820,7 @@ const App = () => {
                 <User size={48} color="#2563eb" />
               </div>
             </div>
-            
+
             <div className="tarjeta tarjeta-hover">
               <div className="flex justify-between items-center">
                 <div>
@@ -827,7 +833,7 @@ const App = () => {
                 <Baby size={48} color="#10b981" />
               </div>
             </div>
-            
+
             <div className="tarjeta tarjeta-hover">
               <div className="flex justify-between items-center">
                 <div>
@@ -869,7 +875,7 @@ const App = () => {
                       const puedeEditar = puedeEditarParto(parto);
                       const tiempoTranscurrido = Date.now() - new Date(parto.fechaRegistro).getTime();
                       const horasTranscurridas = Math.floor(tiempoTranscurrido / (1000 * 60 * 60));
-                      
+
                       return (
                         <tr 
                           key={parto.id}
@@ -950,7 +956,7 @@ const App = () => {
                                   </button>
                                 </>
                               )}
-                              
+
                               {puedeEditar && (
                                 <button
                                   onClick={() => {
@@ -968,7 +974,7 @@ const App = () => {
                                   <Edit3 size={18} />
                                 </button>
                               )}
-                              
+
                               {tienePermiso('anexarCorreccion') && (
                                 <button
                                   onClick={() => {
@@ -1109,9 +1115,21 @@ const App = () => {
         )}
       </div>
     );
-  };
+  }, [
+    partosFiltrados, 
+    tienePermiso, 
+    usuario, 
+    busqueda, 
+    madresFiltradas, 
+    madres, 
+    partos, 
+    calcularDiasHospitalizacion, 
+    puedeEditarParto, 
+    mostrarVistaPreviaPDF, 
+    imprimirBrazalete
+  ]);
 
-  // Formulario de admisión de madre (igual que antes, sin cambios)
+  // Formulario de admisión de madre
   const FormularioAdmision = () => {
     const [datos, setDatos] = useState({
       rut: '',
@@ -1126,16 +1144,16 @@ const App = () => {
 
     const validarFormulario = () => {
       const nuevosErrores = {};
-      
+
       if (!datos.rut) nuevosErrores.rut = 'El RUT es obligatorio';
       else if (!validarRUT(datos.rut)) nuevosErrores.rut = 'RUT inválido';
-      
+
       if (!datos.nombre) nuevosErrores.nombre = 'El nombre es obligatorio';
       if (!datos.edad) nuevosErrores.edad = 'La edad es obligatoria';
       else if (datos.edad < 15 || datos.edad > 60) {
         nuevosErrores.edad = 'La edad debe estar entre 15 y 60 años';
       }
-      
+
       setErrores(nuevosErrores);
       return Object.keys(nuevosErrores).length === 0;
     };
@@ -1150,7 +1168,7 @@ const App = () => {
     return (
       <div className="tarjeta animacion-entrada" style={{ maxWidth: '700px', margin: '0 auto' }}>
         <h2 className="texto-2xl font-bold mb-6">Admisión de Madre</h2>
-        
+
         <div className="grupo-input">
           <label className="etiqueta">RUT *</label>
           <input
@@ -1162,7 +1180,7 @@ const App = () => {
           />
           {errores.rut && <p className="mensaje-error">{errores.rut}</p>}
         </div>
-        
+
         <div className="grupo-input">
           <label className="etiqueta">Nombre Completo *</label>
           <input
@@ -1174,7 +1192,7 @@ const App = () => {
           />
           {errores.nombre && <p className="mensaje-error">{errores.nombre}</p>}
         </div>
-        
+
         <div className="grupo-input">
           <label className="etiqueta">Dirección</label>
           <input
@@ -1185,7 +1203,7 @@ const App = () => {
             onChange={(e) => setDatos({ ...datos, direccion: e.target.value })}
           />
         </div>
-        
+
         <div className="grupo-input">
           <label className="etiqueta">Edad *</label>
           <input
@@ -1199,7 +1217,7 @@ const App = () => {
           />
           {errores.edad && <p className="mensaje-error">{errores.edad}</p>}
         </div>
-        
+
         <div className="grupo-input">
           <label className="etiqueta">Teléfono de Contacto</label>
           <input 
@@ -1210,7 +1228,7 @@ const App = () => {
             onChange={(e) => setDatos({ ...datos, telefono: e.target.value })}
           />
         </div>
-        
+
         <div className="grupo-input">
           <label className="etiqueta">Previsión de Salud</label>
           <input
@@ -1221,7 +1239,7 @@ const App = () => {
             onChange={(e) => setDatos({ ...datos, prevision: e.target.value })}
           />
         </div>
-        
+
         {tienePermiso('verDatosClinicos') && (
           <div className="grupo-input">
             <label className="etiqueta">Antecedentes Médicos</label>
@@ -1234,7 +1252,7 @@ const App = () => {
             />
           </div>
         )}
-        
+
         <div className="flex gap-4">
           <button onClick={handleSubmit} className="boton boton-primario" style={{ flex: 1 }}>
             Registrar Madre
@@ -1251,7 +1269,7 @@ const App = () => {
     );
   };
 
-  // Formulario de registro de parto (sin cambios, igual que antes)
+  // Formulario de registro de parto
   const FormularioParto = () => {
     const [datos, setDatos] = useState({
       tipo: 'Vaginal',
@@ -1268,20 +1286,20 @@ const App = () => {
 
     const validarFormulario = () => {
       const nuevosErrores = {};
-      
+
       if (!datos.pesoRN) nuevosErrores.pesoRN = 'El peso es obligatorio';
       else if (datos.pesoRN < 500 || datos.pesoRN > 6000) {
         nuevosErrores.pesoRN = 'Peso fuera del rango válido (500-6000g)';
       }
-      
+
       if (!datos.tallaRN) nuevosErrores.tallaRN = 'La talla es obligatoria';
       else if (datos.tallaRN < 30 || datos.tallaRN > 70) {
         nuevosErrores.tallaRN = 'Talla fuera del rango válido (30-70cm)';
       }
-      
+
       if (!datos.apgar1) nuevosErrores.apgar1 = 'APGAR 1min es obligatorio';
       if (!datos.apgar5) nuevosErrores.apgar5 = 'APGAR 5min es obligatorio';
-      
+
       setErrores(nuevosErrores);
       return Object.keys(nuevosErrores).length === 0;
     };
@@ -1304,7 +1322,7 @@ const App = () => {
             Tendrá 2 horas para editar este registro después de guardarlo
           </p>
         </div>
-        
+
         <div className="grid grid-cols-2 gap-4">
           <div className="grupo-input">
             <label className="etiqueta">Tipo de Parto *</label>
@@ -1319,7 +1337,7 @@ const App = () => {
               <option value="Ventosa">Ventosa</option>
             </select>
           </div>
-          
+
           <div className="grupo-input">
             <label className="etiqueta">Fecha *</label>
             <input
@@ -1330,7 +1348,7 @@ const App = () => {
             />
           </div>
         </div>
-        
+
         <div className="grid grid-cols-2 gap-4">
           <div className="grupo-input">
             <label className="etiqueta">Hora *</label>
@@ -1341,7 +1359,7 @@ const App = () => {
               onChange={(e) => setDatos({ ...datos, hora: e.target.value })}
             />
           </div>
-          
+
           <div className="grupo-input">
             <label className="etiqueta">Peso del RN (gramos) *</label>
             <input
@@ -1356,7 +1374,7 @@ const App = () => {
             {errores.pesoRN && <p className="mensaje-error">{errores.pesoRN}</p>}
           </div>
         </div>
-        
+
         <div className="grid grid-cols-3 gap-4">
           <div className="grupo-input">
             <label className="etiqueta">Talla del RN (cm) *</label>
@@ -1371,7 +1389,7 @@ const App = () => {
             />
             {errores.tallaRN && <p className="mensaje-error">{errores.tallaRN}</p>}
           </div>
-          
+
           <div className="grupo-input">
             <label className="etiqueta">APGAR 1 min *</label>
             <input
@@ -1385,7 +1403,7 @@ const App = () => {
             />
             {errores.apgar1 && <p className="mensaje-error">{errores.apgar1}</p>}
           </div>
-          
+
           <div className="grupo-input">
             <label className="etiqueta">APGAR 5 min *</label>
             <input
@@ -1426,7 +1444,7 @@ const App = () => {
             </label>
           </div>
         </div>
-        
+
         <div className="grupo-input">
           <label className="etiqueta">Observaciones</label>
           <textarea
@@ -1437,7 +1455,7 @@ const App = () => {
             onChange={(e) => setDatos({ ...datos, observaciones: e.target.value })}
           />
         </div>
-        
+
         <div className="flex gap-4">
           <button onClick={handleSubmit} className="boton boton-secundario" style={{ flex: 1 }}>
             Guardar y Generar Brazalete
@@ -1461,9 +1479,21 @@ const App = () => {
   const Layout = ({ children }) => (
     <div style={{ minHeight: '100vh', backgroundColor: '#f3f4f6' }}>
       {alerta && <AlertaFlotante mensaje={alerta.mensaje} tipo={alerta.tipo} />}
-      {vistaPrevia && <VistaPreviaBrazalete />}
-      {vistaPreviaMadre && <VistaPreviaMadre />}
-      
+      {vistaPrevia && (
+        <VistaPreviaBrazalete 
+          vistaPrevia={vistaPrevia}
+          onImprimir={imprimirBrazalete}
+          onCerrar={() => setVistaPrevia(null)}
+        />
+      )}
+      {vistaPreviaMadre && (
+        <VistaPreviaMadre 
+          vistaPreviaMadre={vistaPreviaMadre}
+          mostrarDatosClinicos={tienePermiso('verDatosClinicos')}
+          onCerrar={() => setVistaPreviaMadre(null)}
+        />
+      )}
+
       <nav style={{
         backgroundColor: '#2563eb',
         color: 'white',
@@ -1481,7 +1511,7 @@ const App = () => {
                 </p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setPantallaActual('dashboard')}
@@ -1491,7 +1521,7 @@ const App = () => {
                 <Home size={20} />
                 Inicio
               </button>
-              
+
               {tienePermiso('generarReportes') && (
                 <button 
                   onClick={() => {
@@ -1509,7 +1539,7 @@ const App = () => {
                   Reporte REM
                 </button>
               )}
-              
+
               {tienePermiso('crearPaciente') && (
                 <button
                   onClick={() => setPantallaActual('admision')}
@@ -1578,7 +1608,7 @@ const App = () => {
                     Registros
                     <ChevronDown size={16} />
                   </button>
-                  
+
                   {menuRegistrosAbierto && (
                     <div style={{
                       position: 'absolute',
@@ -1610,7 +1640,7 @@ const App = () => {
                           Correcciones ({correcciones.length})
                         </button>
                       )}
-                      
+
                       {partogramas.length > 0 && (
                         <button
                           onClick={() => {
@@ -1630,7 +1660,7 @@ const App = () => {
                           Partogramas ({partogramas.length})
                         </button>
                       )}
-                      
+
                       {epicrisis.length > 0 && (
                         <button
                           onClick={() => {
@@ -1665,7 +1695,7 @@ const App = () => {
                   Gestión Usuarios
                 </button>
               )}
-              
+
               <button
                 onClick={cerrarSesion}
                 className="boton boton-peligro"
@@ -1677,11 +1707,11 @@ const App = () => {
           </div>
         </div>
       </nav>
-      
+
       <div className="contenedor" style={{ padding: '2rem 1rem' }}>
         {children}
       </div>
-      
+
       <footer style={{
         backgroundColor: '#1f2937',
         color: 'white',
@@ -1702,14 +1732,14 @@ const App = () => {
 
   // Renderizado principal
   if (!usuario) {
-    return <PantallaLogin />;
+    return <PantallaLogin onLogin={iniciarSesion} mostrarAlerta={mostrarAlerta} />;
   }
 
   return (
     <Layout>
       {pantallaActual === 'dashboard' && (
         <>
-          <Dashboard />
+          {Dashboard}
           {tienePermiso('verAuditoria') && (
             <>
               <h2 className="texto-2xl font-bold mt-6 mb-4">Historial de Auditoría del Sistema</h2>
@@ -1725,7 +1755,7 @@ const App = () => {
           )}
         </>
       )}
-      
+
       {pantallaActual === 'editar-madre' && madreSeleccionada && (
         <EditarMadre
           madre={madreSeleccionada}
@@ -1738,23 +1768,23 @@ const App = () => {
 
             const madreAnterior = madres.find(m => m.id === madreSeleccionada.id);
             const cambios = [];
-            
+
             Object.keys(datosActualizados).forEach(key => {
               if (madreAnterior[key] !== datosActualizados[key]) {
                 cambios.push(`${key}: "${madreAnterior[key]}" → "${datosActualizados[key]}"`);
               }
             });
-            
-            setMadres(madres.map(m =>
+
+            setMadres(prev => prev.map(m =>
               m.id === madreSeleccionada.id ? { ...m, ...datosActualizados } : m
             ));
-            
+
             registrarEventoAuditoria({
               accion: ACCIONES_AUDITORIA.EDITAR_PACIENTE,
               detalle: `✏️ EDICIÓN DE DATOS: Madre ${madreSeleccionada.nombre} (${madreSeleccionada.rut}) | Cambios: ${cambios.join(' | ')} | Por: ${usuario.nombre}`,
               usuario: usuario.nombre
             });
-            
+
             setMadreSeleccionada(null);
             setPantallaActual('dashboard');
             mostrarAlerta(MENSAJES.exito.datosActualizados, 'success');
@@ -1804,11 +1834,11 @@ const App = () => {
           <ReporteREM partos={partos} madres={madres} />
         </>
       )}
-      
+
       {pantallaActual === 'admision' && tienePermiso('crearPaciente') && <FormularioAdmision />}
-      
+
       {pantallaActual === 'registrar-parto' && tienePermiso('crearRegistroParto') && <FormularioParto />}
-      
+
       {pantallaActual === 'notas-enfermera' && usuario.rol === ROLES.ENFERMERA && (
         <NotasEnfermera
           notas={notasEnfermera}
