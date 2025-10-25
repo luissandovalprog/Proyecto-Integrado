@@ -1,5 +1,3 @@
-// src/componentes/VistaPreviaMadre.js
-
 function VistaPreviaMadre({ madre, onClose }) {
   if (!madre) return null;
 

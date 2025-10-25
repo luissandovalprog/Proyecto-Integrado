@@ -1,6 +1,5 @@
 // src/componentes/ReporteREM.js
 import React, { useState } from 'react';
-import { datosMock } from '../mocks/datos';
 
 function exportarCSV(data, filename = 'reporte-rem.csv') {
   const csvRows = [

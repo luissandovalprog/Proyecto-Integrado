@@ -1,6 +1,6 @@
 // src/componentes/TablaAuditoria.js
 import React, { useState, useEffect } from 'react';
-import { Shield, Search, Download, Filter, Eye, Calendar } from 'lucide-react';
+import { Shield, Search, Download, Eye, Calendar } from 'lucide-react';
 import { obtenerEventosAuditoria, exportarAuditoriaJSON, obtenerEstadisticasAuditoria } from '../servicios/api';
 import { ACCIONES_AUDITORIA } from '../utilidades/constantes';
 
