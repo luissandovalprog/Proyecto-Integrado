@@ -10,11 +10,17 @@
     "format": "prettier --write src/**/*.js",
     "test": "echo \"Pruebas pendientes\" && exit 0"
   },
-  "keywords": ["hospital", "partos", "react", "healthcare"],
+  "keywords": [
+    "hospital",
+    "partos",
+    "react",
+    "healthcare"
+  ],
   "author": "Xavier Romero, Luis Sandoval, Vicente Castillo, Ignacio Carrasco",
   "license": "MIT",
   "dependencies": {
-    "jspdf": "^2.5.1",
+    "jspdf": "^3.0.3",
+    "jwt-decode": "^4.0.0",
     "lucide-react": "^0.263.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
@@ -35,7 +41,7 @@
     "style-loader": "^3.3.3",
     "webpack": "^5.89.0",
     "webpack-cli": "^5.1.4",
-    "webpack-dev-server": "^4.15.1"
+    "webpack-dev-server": "^5.2.2"
   },
   "browserslist": [
     "ie 11",

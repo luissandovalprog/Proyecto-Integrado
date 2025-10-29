@@ -29,7 +29,7 @@ export const TIPOS_PARTO = [
 export const RANGOS_MEDICOS = {
   pesoRN: {
     min: 500,
-    max: 6000,
+    max: 11000,
     unidad: 'gramos'
   },
   tallaRN: {
@@ -121,11 +121,107 @@ export const FORMATOS = {
 };
 
 // URLs de la API (configurables por entorno)
-export const API_URLS = {
-  desarrollo: 'http://localhost:8000/api',
-  staging: 'https://staging-partos.hermindamartin.cl/api',
-  produccion: 'https://partos.hermindamartin.cl/api'
+// Ejemplo modificado en src/servicios/api.js
+
+export const API_URLS = 'http://localhost:8000/api'; // O configúralo desde constantes.js
+
+// Función auxiliar (simplificada - añade manejo de errores y refresh token)
+const request = async (endpoint, options = {}) => {
+    const url = `${API_BASE_URL}${endpoint}`;
+    const token = localStorage.getItem('accessToken'); // O donde lo almacenes
+
+    const defaultOptions = {
+        headers: {
+            'Content-Type': 'application/json',
+            ...options.headers,
+        },
+        ...options,
+    };
+
+    if (token) {
+        defaultOptions.headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    try {
+        const response = await fetch(url, defaultOptions);
+
+        if (response.status === 204) { // No Content
+          return null;
+        }
+
+        if (!response.ok) {
+            // Aquí deberías manejar errores, posible expiración de token, etc.
+            const errorData = await response.json();
+            console.error('API Error:', errorData);
+            throw new Error(errorData.detail || `Error ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error('Fetch error:', error);
+        throw error; // Re-lanza para que el componente lo maneje
+    }
 };
+
+// --- AUTENTICACIÓN ---
+export const login = async (username, password) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/token/`, { // Endpoint de Simple JWT
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }), // Ajusta si tu modelo Usuario usa 'username' u otra cosa
+    });
+    if (!response.ok) {
+       const errorData = await response.json();
+       throw new Error(errorData.detail || 'Error de autenticación');
+    }
+    const data = await response.json();
+    localStorage.setItem('accessToken', data.access); // Almacena tokens
+    localStorage.setItem('refreshToken', data.refresh);
+    // Aquí podrías decodificar el token para obtener info del usuario si es necesario
+    // O hacer otra llamada a un endpoint /api/usuarios/me/ para obtener datos del usuario logueado
+    return { exito: true, usuario: { nombre: username /* ... otros datos */ } }; // Simula la respuesta anterior
+  } catch (error) {
+     console.error("Login failed:", error);
+     return { exito: false, mensaje: error.message };
+  }
+};
+
+export const logout = () => {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    // Opcional: llamar a un endpoint de blacklist de token en el backend
+    return Promise.resolve({ exito: true });
+};
+
+// --- MADRES ---
+export const obtenerMadres = async (filtros = {}) => {
+    const params = new URLSearchParams(filtros);
+    return request(`/madres?${params}`); // GET /api/madres/
+};
+
+export const crearMadre = async (datos) => {
+    return request('/madres/', { // POST /api/madres/
+        method: 'POST',
+        body: JSON.stringify(datos),
+    });
+};
+
+ export const actualizarMadre = async (id, datos) => {
+    return request(`/madres/${id}/`, { // PUT o PATCH /api/madres/{id}/
+        method: 'PATCH', // O PUT si reemplazas todo el objeto
+        body: JSON.stringify(datos),
+    });
+};
+
+ export const eliminarMadre = async (id) => {
+    return request(`/madres/${id}/`, { // DELETE /api/madres/{id}/
+        method: 'DELETE',
+    });
+};
+// ... Implementa las demás funciones para Partos, RecienNacidos, etc.
+//     usando los endpoints correctos (ej. /api/partos/, /api/partos/{id}/)
+//     y los métodos HTTP adecuados (GET, POST, PUT, PATCH, DELETE)
+
 
 // PERMISOS POR ROL - Cumplimiento RBAC según Ley 20.584
 export const PERMISOS = {
@@ -317,5 +413,12 @@ export const LIMITES = {
 export const TURNOS = {
   DIURNO: 'diurno',
   NOCTURNO: 'nocturno',
-  VESPERTINO: 'vespertino'
+  VESPERTINO: 'vespertino',
+  NINGUNO: 'Ninguno'
 };
+
+export const OPCIONES_TURNO_LOGIN = [
+    { value: TURNOS.MANANA, label: 'Mañana (Diurno 08-20)' },
+    { value: TURNOS.TARDE,   label: 'Tarde (Vespertino 14-22)' },
+    { value: TURNOS.NOCHE,   label: 'Noche (Nocturno 20-08)' },
+];
